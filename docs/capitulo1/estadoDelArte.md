@@ -41,7 +41,6 @@
 - **Sin sistema de alertas.** Hypurrscan no ofrece ningún tipo de notificación ni alerta: ni de precio, ni de actividad de direcciones, ni de condiciones de mercado.
 - **Sin leaderboard configurable.** No permite visualizar los mayores compradores o vendedores de un token en un periodo de tiempo seleccionado por el usuario.
 - **Sin clustering de direcciones.** Aunque permite etiquetar direcciones individualmente, no ofrece la funcionalidad de agrupar direcciones en clusters con un nombre común para facilitar la identificación en análisis de actividad.
-- **Sin precios en tiempo real integrados.** No proporciona un panel de seguimiento de precios de todos los activos de forma continua.
 
 ---
 
@@ -88,9 +87,9 @@ Existen bots y scripts desarrollados por la comunidad que acceden a los datos de
 
 |Criterio|Cielo Finance|Hypurrscan|TradingView|Herramientas comunidad|**Solución propuesta**|
 |-|-|-|-|-|-|
-|Precios en tiempo real (Hyperliquid)|No|No|Sí|Parcial|**Sí**|
+|Precios en tiempo real (Hyperliquid)|No|Sí|Sí|Parcial|**Sí**|
 |Leaderboard compradores/vendedores|No|No|No|No|**Sí**|
-|Etiquetado y clustering de direcciones|No|Etiquetado (sin clustering)|No|No|**Sí**|
+|Etiquetado y clustering de direcciones|No|Sí|No|No|**Sí**|
 |Alertas de precio con webhook|Sí (lenta)|No|Sí (sin webhook nativo)|No|**Sí**|
 |Velocidad adecuada para Hyperliquid|No|N/A|N/A|Variable|**Sí**|
 |Interfaz integrada|Sí|Sí|Sí|No|**Sí**|

@@ -41,6 +41,6 @@ Siguiendo la aproximación por etapas propuesta para construir una narrativa coh
 |Mapeo objetivos–disciplinas–capítulos|Tabla|Objetivos (Tabla 2)|
 |Fases de RUP y mapeo al TFG|Tabla|Metodología (Tabla 3)|
 |Disciplinas técnicas y aplicación|Tabla|Metodología (Tabla 4)|
-|Diagrama de fases/disciplinas de RUP|Figura|Metodología (Figura 1) — *pendiente de insertar imagen*|
+|Diagrama de fases/disciplinas de RUP|Figura|Metodología (Figura 1)|
 
 </div>

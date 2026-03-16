@@ -6,8 +6,6 @@ Hyperliquid Docs. (s.f.). *HIP-3: Builder-deployed perpetuals*. Recuperado el 11
 
 ---
 
-Aldridge, I. (2013). *High-Frequency Trading: A Practical Guide to Algorithmic Strategies and Trading Systems* (2.ª ed.). Wiley. https://doi.org/10.1002/9781118343500
-
 BlockEden. (2026, 10 de enero). Hyperliquid's $844M Revenue Machine: How a Single DEX Outearned Ethereum in 2025. *BlockEden Blog*. https://blockeden.xyz/blog/2026/01/10/hyperliquid-revenue-dominance-onchain-trading-solana/
 
 Blockonomi. (2025). Hyperliquid Hits $32B Daily Volume Record as Self-Funded DEX Triples TVL in 2025. *Blockonomi*. https://blockonomi.com/hyperliquid-hits-32b-daily-volume-record-as-self-funded-dex-triples-tvl-in-2025/
@@ -29,9 +27,6 @@ HypeWatch. (2026). Hyperliquid Complete Guide 2026: Technology, HIPs, Risks, and
 Jacobson, I., Booch, G. y Rumbaugh, J. (1999). *The Unified Software Development Process*. Addison-Wesley Professional.
 
 Madhavan, A. (2000). Market Microstructure: A Survey. *Journal of Financial Markets*, *3*(3), 205-258. https://doi.org/10.1016/S1386-4181(00)00007-0
-
-
-The Biggish. (2025). Hyperliquid's on-chain order book hits 200,000 TPS: Architecture breakdown. *The Biggish*. https://thebiggish.com/news/hyperliquid-s-on-chain-order-book-hits-200-000-tps-architecture-breakdown
 
 TradingView. (s.f.). *Alertas — TradingView*. Recuperado el 10 de marzo de 2026, de https://www.tradingview.com/support/solutions/43000520149-about-alerts/
 

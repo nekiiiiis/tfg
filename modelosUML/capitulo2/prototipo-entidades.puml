@@ -1,0 +1,34 @@
+@startsalt
+
+{+
+  {/ Leaderboard | <b>Entidades | Alertas }
+  {
+    {+
+      <b>Entidades registradas
+      ---
+      {#
+        <b>Nombre | <b>Direcciones | <b>Acciones
+        Wintermute | 0xabc1...f3, 0xdef2...a7 | [Editar] [Eliminar]
+        JumpTrading | 0x9ef4...b2 | [Editar] [Eliminar]
+      }
+    }
+    ---
+    {+
+      <b>Crear nueva entidad
+      ---
+      Nombre: | "                    "
+      Direccion: | "                              " | [Anadir]
+      ---
+      Direcciones anadidas:
+      {#
+        <b>Direccion | <b>Accion
+        0xabc1...f3 | [Quitar]
+        0xdef2...a7 | [Quitar]
+      }
+      ---
+      [Guardar entidad]
+    }
+  }
+}
+
+@endsalt

@@ -1,0 +1,20 @@
+@startuml
+
+participant "Sistema" as S
+participant "Servicio Webhook" as SW
+
+S -> S : Alerta disparada:\ngenerar Notificacion
+
+S -> SW : POST webhook URL\n(payload: token, precio, umbral)
+
+alt Respuesta exitosa (2xx)
+  SW --> S : 200 OK
+  S -> S : Marcar alerta como Notificada
+  S -> S : Rearmar alerta a Activa
+else Error de red o respuesta no exitosa
+  SW --> S : Error / timeout
+  S -> S : Marcar alerta como Error
+  S -> S : Programar reintento
+end
+
+@enduml

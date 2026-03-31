@@ -1,0 +1,25 @@
+@startuml
+
+start
+
+:Usuario accede a la pestana Alertas;
+
+:Seleccionar tipo de mercado\n(Spot / PerpNativo / PerpHIP3);
+
+:Seleccionar token del mercado elegido;
+
+:Introducir umbral en $;
+
+:Introducir URL del webhook;
+
+if (Datos validos?) then (si)
+  :Crear AlertaPrecio;
+  :Activar alerta;
+  :Mostrar confirmacion;
+else (no)
+  :Mostrar mensaje de error;
+endif
+
+stop
+
+@enduml

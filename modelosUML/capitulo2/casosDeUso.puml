@@ -1,0 +1,30 @@
+@startuml
+
+left to right direction
+
+actor "Usuario" as U
+actor "Hyperliquid L1" as HL
+actor "Servicio Webhook" as SW
+
+rectangle "Sistema" {
+  usecase "CU-01\nConsultar\nleaderboard" as CU01
+  usecase "CU-02\nCrear\nentidad" as CU02
+  usecase "CU-03\nGestionar\nentidades" as CU03
+  usecase "CU-04\nConfigurar\nalerta" as CU04
+  usecase "CU-05\nGestionar\nalertas" as CU05
+  usecase "CU-06\nEvaluar\nalertas" as CU06
+  usecase "CU-07\nEnviar\nnotificacion" as CU07
+}
+
+U --> CU01
+U --> CU02
+U --> CU03
+U --> CU04
+U --> CU05
+
+HL --> CU01
+HL --> CU06
+
+CU07 --> SW
+
+@enduml

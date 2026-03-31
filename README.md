@@ -28,7 +28,7 @@ Universidad Europea del Atlántico — Curso 2025–2026
 |Entrega|Capítulo|Contenido|Estado|
 |-|-|-|:-:|
 |1.ª|[Capítulo 1](docs/capitulo1/README.md)|Contextualización, estado del arte, objetivos y metodología|✅|
-|2.ª|[Capítulo 2](docs/capitulo2/README.md)|Disciplina de requisitos|🔲|
+|2.ª|[Capítulo 2](docs/capitulo2/README.md)|Disciplina de requisitos|✅|
 |3.ª|[Capítulo 3](docs/capitulo3/README.md)|Análisis y diseño|🔲|
 |4.ª|[Capítulos finales](docs/capitulosFinales/README.md)|Descripción de la solución, conclusiones, discusión, recomendaciones y futuras líneas|🔲|
 
@@ -74,9 +74,9 @@ Universidad Europea del Atlántico — Curso 2025–2026
 
 ||Artefacto|
 |-|-|
-|🔲|[Modelo del dominio](docs/capitulo2/modeloDelDominio.md) · Diagramas de clases, objetos, estados|
-|🔲|[Glosario](docs/capitulo2/glosario.md)|
-|🔲|[Requisitos suplementarios](docs/capitulo2/requisitosSupplementarios.md)|
+|✅|[Modelo del dominio](docs/capitulo2/modeloDelDominio.md) · Diagramas de clases, objetos, estados|
+|✅|[Glosario](docs/capitulo2/glosario.md)|
+|✅|[Requisitos suplementarios](docs/capitulo2/requisitosSupplementarios.md)|
 
 </div>
 
@@ -86,12 +86,12 @@ Universidad Europea del Atlántico — Curso 2025–2026
 
 ||Actividad|
 |-|-|
-|🔲|[Encontrar actores y casos de uso](docs/capitulo2/actoresYCasosDeUso.md)|
-|🔲|[Priorizar casos de uso](docs/capitulo2/priorizacionCdU.md)|
-|🔲|[Detallar casos de uso](docs/capitulo2/detalleCdU.md)|
-|🔲|[Prototipar casos de uso](docs/capitulo2/prototiposCdU.md)|
-|🔲|[Estructurar modelo de CdU](docs/capitulo2/estructuraCdU.md)|
-|🔲|[Diagrama de contexto](docs/capitulo2/diagramaDeContexto.md)|
+|✅|[Encontrar actores y casos de uso](docs/capitulo2/actoresYCasosDeUso.md)|
+|✅|[Priorizar casos de uso](docs/capitulo2/priorizacionCdU.md)|
+|✅|[Detallar casos de uso](docs/capitulo2/detalleCdU.md)|
+|✅|[Prototipar casos de uso](docs/capitulo2/prototiposCdU.md)|
+|✅|[Estructurar modelo de CdU](docs/capitulo2/estructuraCdU.md)|
+|✅|[Diagrama de contexto](docs/capitulo2/diagramaDeContexto.md)|
 
 </div>
 
@@ -171,7 +171,7 @@ Universidad Europea del Atlántico — Curso 2025–2026
 |Fase RUP|Disciplinas|Entrega|Estado|
 |-|-|-|:-:|
 |Inicio|Contextualización y viabilidad|Cap. 1|✅|
-|Elaboración|Modelado del dominio, Requisitos|Cap. 2|🔲|
+|Elaboración|Modelado del dominio, Requisitos|Cap. 2|✅|
 |Elaboración|Análisis, Diseño|Cap. 3|🔲|
 |Construcción|Implementación, Pruebas|Caps. finales|🔲|
 |Transición|Futuras líneas|Caps. finales|🔲|

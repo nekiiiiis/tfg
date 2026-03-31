@@ -1,0 +1,25 @@
+@startuml
+
+[*] --> Creada
+Creada --> Activa : activar
+
+Activa --> Disparada : precio traspasa umbral
+Activa --> Desactivada : desactivar
+Activa --> Eliminada : eliminar
+
+Desactivada --> Activa : activar
+Desactivada --> Eliminada : eliminar
+
+Disparada --> Notificada : webhook exitoso
+Disparada --> Error : webhook falla
+Disparada --> Eliminada : eliminar
+
+Error --> Activa : reintentar
+Error --> Eliminada : eliminar
+
+Notificada --> Activa : rearmar
+Notificada --> Eliminada : eliminar
+
+Eliminada --> [*]
+
+@enduml

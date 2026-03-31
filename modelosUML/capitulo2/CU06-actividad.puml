@@ -1,0 +1,33 @@
+@startuml
+
+start
+
+:Obtener lista de alertas activas;
+
+while (Quedan alertas por evaluar?) is (si)
+  :Obtener precio actual del token
+  desde Hyperliquid L1;
+
+  if (Precio traspasa umbral?) then (si)
+    :Marcar alerta como Disparada;
+    :Ejecutar CU-07
+    Enviar notificacion;
+  else (no)
+  endif
+
+  :Siguiente alerta;
+endwhile (no)
+
+:Esperar intervalo
+de evaluacion;
+
+note right
+  Este ciclo se ejecuta
+  de forma continua
+  mientras el sistema
+  este activo
+end note
+
+stop
+
+@enduml

@@ -35,7 +35,6 @@ HL --> CU06
 
 CU07 --> SW
 
-CU01 ..> CU02 : <<extend>>
 CU06 ..> CU07 : <<include>>
 
 @enduml

@@ -24,7 +24,7 @@ Realizando una abstracción de la realidad y a partir de esta especificando los 
 
 |||
 |-|-|
-|[Diagrama de clases](modeloDelDominio.md)|Clases conceptuales del dominio, atributos y asociaciones|
+|[Diagrama de clases](modeloDelDominio.md)|Clases conceptuales del dominio y asociaciones|
 |[Diagrama de objetos](modeloDelDominio.md)|Instancias concretas del modelo|
 |[Diagrama de estados](modeloDelDominio.md)|Estados y transiciones de las entidades clave|
 |[Glosario](glosario.md)|Vocabulario común del dominio|

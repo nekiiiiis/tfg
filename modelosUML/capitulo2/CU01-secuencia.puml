@@ -1,21 +1,21 @@
 @startuml
 
-actor Usuario as U
+actor "Usuario" as U
 participant "Sistema" as S
-participant "Hyperliquid L1" as HL
+participant "Hyperliquid" as HL
 
 U -> S : Seleccionar mercado, token y temporalidad
-S -> HL : Suscribirse a WebSocket (trades del token)
-HL --> S : Stream de operaciones en tiempo real
+S -> HL : Suscribirse a WebSocket (trades)
+HL --> S : Stream de operaciones
 
-S -> S : Calcular volumenes por direccion\nen la temporalidad seleccionada
-S -> S : Resolver nombres de entidades\npara las direcciones conocidas
-S --> U : Mostrar leaderboard actualizado
+S -> S : Calcular volumenes por direccion
+S -> S : Resolver nombres de entidades
+S --> U : Mostrar leaderboard
 
-loop Mientras el usuario permanece en la vista
+loop Mientras permanece en la vista
   HL --> S : Nueva operacion
   S -> S : Recalcular volumenes
-  S --> U : Actualizar leaderboard en tiempo real
+  S --> U : Actualizar leaderboard
 end
 
 @enduml

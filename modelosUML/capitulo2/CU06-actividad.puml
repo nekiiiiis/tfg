@@ -2,31 +2,21 @@
 
 start
 
-:Obtener lista de alertas activas;
+:Obtener alertas activas;
 
-while (Quedan alertas por evaluar?) is (si)
-  :Obtener precio actual del token
-  desde Hyperliquid L1;
+while (Quedan alertas?) is (si)
+  :Obtener precio actual del token;
 
   if (Precio traspasa umbral?) then (si)
     :Marcar alerta como Disparada;
-    :Ejecutar CU-07
-    Enviar notificacion;
+    :Ejecutar CU-07 Enviar notificacion;
   else (no)
   endif
 
   :Siguiente alerta;
 endwhile (no)
 
-:Esperar intervalo
-de evaluacion;
-
-note right
-  Este ciclo se ejecuta
-  de forma continua
-  mientras el sistema
-  este activo
-end note
+:Esperar intervalo de evaluacion;
 
 stop
 

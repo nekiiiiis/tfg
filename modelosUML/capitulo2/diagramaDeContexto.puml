@@ -1,15 +1,17 @@
 @startuml
 
-rectangle "Sistema\nHerramientas en Tiempo Real\nsobre la L1 de Hyperliquid" as S
+left to right direction
 
 actor "Usuario" as U
 actor "Hyperliquid L1" as HL
 actor "Servicio Webhook" as SW
 
-U -right-> S : Consulta leaderboard\nGestiona entidades\nConfigura alertas
+package "Sistema" {
+  usecase "Consultar leaderboard\nGestionar entidades\nConfigurar alertas" as SIS
+}
 
-HL -down-> S : Precios en tiempo real\nOperaciones (trades)\nvia API REST y WebSocket
-
-S -right-> SW : Notificaciones\nde alertas disparadas
+U --> SIS
+HL --> SIS : Precios y operaciones\nvia API/WebSocket
+SIS --> SW : Notificaciones\nde alertas
 
 @enduml

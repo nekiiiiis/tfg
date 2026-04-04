@@ -4,33 +4,35 @@ hide circle
 hide stereotype
 hide empty members
 
-class Usuario
-class Token
-class Mercado
-class Precio
-class Direccion
-class Entidad
-class Operacion
-class Temporalidad
-class AlertaPrecio
-class Webhook
-class Notificacion
+class Usuario{}
+class Entidad{}
+class Direccion{}
+class Token{}
+class Mercado{}
+class Precio{}
+class Operacion{}
+class Temporalidad{}
+class AlertaPrecio{}
+class Webhook{}
+class Notificacion{}
 
-Usuario "1" -- "*" Entidad : crea
-Usuario "1" -- "*" AlertaPrecio : configura
-Entidad "1" -- "*" Direccion : agrupa
-Direccion "1" -- "*" Operacion : ejecuta
-Operacion "*" -- "1" Token : sobre
-Token "*" -- "1" Mercado : pertenece-a
-Token "1" -- "1" Precio : tiene
-AlertaPrecio "*" -- "1" Token : monitoriza
-AlertaPrecio "1" -- "1" Webhook : notifica-via
-AlertaPrecio "1" -- "*" Notificacion : genera
+Usuario --> Entidad : crea
+Usuario --> AlertaPrecio : configura
+Entidad --> Direccion : agrupa
+Direccion --> Operacion : ejecuta
+Operacion --> Token : sobre
+Token --> Mercado : pertenece a
+Token --> Precio : tiene
+AlertaPrecio --> Token : monitoriza
+AlertaPrecio --> Webhook : notifica via
+AlertaPrecio --> Notificacion : genera
 
-note "Spot | PerpNativo | PerpHIP3" as N1
-N1 .. Mercado
+note bottom of Mercado
+  Spot | PerpNativo | PerpHIP3
+end note
 
-note "1h | 4h | 6h | 12h | 1d | 1w" as N2
-N2 .. Temporalidad
+note bottom of Temporalidad
+  1h | 4h | 6h | 12h | 1d | 1w
+end note
 
 @enduml

@@ -22,7 +22,7 @@ object "BTC : Token" as t1 {
 }
 
 object "PerpNativo : Mercado" as m1 {
-  tipo = "PerpNativo"
+  tipo = PerpNativo
 }
 
 object "PURR : Token" as t2 {
@@ -30,43 +30,43 @@ object "PURR : Token" as t2 {
 }
 
 object "Spot : Mercado" as m2 {
-  tipo = "Spot"
+  tipo = Spot
 }
 
-object "98500 : Precio" as p1 {
+object "pBTC : Precio" as p1 {
   valor = 98500
 }
 
 object "compra500k : Operacion" as op1 {
-  volumenUSD = 500000
-  tipo = "compra"
+  volumen = 500000
+  tipo = compra
 }
 
 object "alertaBTC : AlertaPrecio" as a1 {
-  umbralUSD = 100000
+  umbral = 100000
 }
 
 object "alertaPURR : AlertaPrecio" as a2 {
-  umbralUSD = 0.50
+  umbral = 0.50
 }
 
 object "whDiscord : Webhook" as w1 {
-  url = "https://discord.com/api/..."
+  url = "https://discord..."
 }
 
-u1 -- e1 : crea
-u1 -- a1 : configura
-u1 -- a2 : configura
-e1 -- d1 : agrupa
-e1 -- d2 : agrupa
-d1 -- op1 : ejecuta
-op1 -- t1 : sobre
-t1 -- m1 : pertenece-a
-t1 -- p1 : tiene
-t2 -- m2 : pertenece-a
-a1 -- t1 : monitoriza
-a2 -- t2 : monitoriza
-a1 -- w1 : notifica-via
-a2 -- w1 : notifica-via
+u1 --> e1 : crea
+u1 -d-> a1 : configura
+u1 -d-> a2 : configura
+e1 --> d1 : agrupa
+e1 --> d2 : agrupa
+d1 --> op1 : ejecuta
+op1 --> t1 : sobre
+t1 --> m1 : pertenece a
+t1 -r-> p1 : tiene
+t2 --> m2 : pertenece a
+a1 --> t1 : monitoriza
+a2 --> t2 : monitoriza
+a1 -r-> w1 : notifica via
+a2 -r-> w1 : notifica via
 
 @enduml

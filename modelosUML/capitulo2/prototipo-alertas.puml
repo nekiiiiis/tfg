@@ -4,14 +4,14 @@
   ---
   {#
     <b>Token | <b>Mercado    | <b>Umbral ($) | <b>Webhook          | <b>Estado      | <b>Acciones
-    BTC   | PerpNativo  | 100 000      | https://discord...  | Activa        | [Desactivar] [Eliminar]
-    PURR  | Spot        | 0.50         | https://discord...  | Activa        | [Desactivar] [Eliminar]
-    FRIEND| PerpHIP3    | 2.00         | https://slack...    | Desactivada   | [Activar] [Eliminar]
+    BTC   | Perps nativos | 100 000    | https://discord...  | Activa        | [Desactivar] [Eliminar]
+    PURR  | Spot          | 0.50       | https://discord...  | Activa        | [Desactivar] [Eliminar]
+    FRIEND| Perps HIP-3   | 2.00       | https://slack...    | Desactivada   | [Activar] [Eliminar]
   }
   ---
   <b>Crear nueva alerta
   {
-    Mercado:     | ^Spot ^ PerpNativo ^ PerpHIP3^
+    Mercado:     | ^Spot ^ Perps nativos ^ Perps HIP-3^
     Token:       | ^BTC^
     Umbral ($):  | "          "
     URL Webhook: | "                              "

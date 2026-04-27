@@ -48,9 +48,11 @@ note right of BE
 end note
 
 note bottom of HOST
-  restart: unless-stopped
-  health checks Docker
-  depends_on: service_healthy
+  Auto-reinicio del contenedor
+  tras crash o reboot del host.
+  Sondas de salud por servicio.
+  Arranque ordenado: backend
+  espera a postgres y redis.
 end note
 
 @enduml

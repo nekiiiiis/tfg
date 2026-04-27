@@ -2,14 +2,14 @@
 
 ## Propósito
 
-El diseño de clases refina el [Análisis de clases](analisisClases.md) hasta el detalle ejecutable: cada clase de análisis se materializa en una o varias clases de diseño TypeScript con **firmas de método tipadas**, **decoradores NestJS** que activan los mecanismos arquitectónicos, **DTOs y mappers** que cruzan los bordes del sistema y **adaptadores** que implementan los puertos definidos por la aplicación. El catálogo resultante es la última pieza antes del código del Capítulo 4.
+El diseño de clases refina el [Análisis de clases](analisisClases.md) hasta el nivel necesario para que la implementación del Capítulo 4 sea un refinamiento mecánico del diseño. Cada clase de análisis se materializa en una o varias clases de diseño con **responsabilidades, firmas tipadas, estereotipos y dependencias** explícitas, organizadas según la arquitectura hexagonal fijada en el [Diseño de la arquitectura](disenoArquitectura.md). El diseño no incluye cuerpos de método: el cuerpo es la implementación.
 
 <div align=center>
 
-||||
+|||
 |-|-|
 |**Punto de partida**|Clases de análisis (boundary/control/entity), arquitectura hexagonal y módulos NestJS del [Diseño de la arquitectura](disenoArquitectura.md)|
-|**Resultado**|Catálogo de clases de diseño por módulo, con interfaces de puerto, servicios de aplicación, repositorios, adaptadores, DTOs y mappers|
+|**Resultado**|Catálogo de clases de diseño por módulo y por capa hexagonal, con interfaces de puerto, servicios de aplicación, repositorios, adaptadores, DTOs y mappers|
 |**Restricción**|Cada clase de diseño nombra el rol de análisis del que procede; cada interfaz de puerto refleja una operación del control de análisis|
 
 </div>
@@ -20,12 +20,12 @@ El diseño de clases refina el [Análisis de clases](analisisClases.md) hasta el
 
 |Convención|Aplicación|
 |-|-|
-|**Nombrado**|Servicios de aplicación: `XxxService`. Puertos de entrada: `XxxUseCase` o `IXxxService`. Repositorios: `XxxRepository`. Adaptadores externos: `XxxConnector` o `XxxAdapter`. DTOs: `CrearXxxDto`, `XxxResponseDto`. Eventos: nombres en pasado, sin prefijo|
-|**Decoradores**|`@Injectable()` para servicios, `@Controller('ruta')` para REST controllers, `@WebSocketGateway()` para gateways WS, `@OnEvent('X')` para handlers de bus, `@Entity()` para mapping ORM|
-|**Tipado**|Estricto. `noImplicitAny` activado. Tipos de dominio (no `string`/`number` desnudos) cuando aporten valor: `Address`, `TokenSymbol`, `Volume` como brand types|
-|**Visibilidad**|Repositorios y adaptadores `private` al módulo (no se exportan). Solo los servicios de aplicación se exportan con el array `exports` de `@Module`|
-|**Inmutabilidad**|DTOs y eventos con `readonly` en todos los campos. Entidades del dominio mutables solo a través de métodos que respeten invariantes (no setters públicos)|
-|**Errores**|Excepciones del dominio extienden `DomainException` (clase abstracta en `domain/`). Los controllers las traducen a HTTP via `ExceptionFilter`|
+|**Nomenclatura**|Servicios de aplicación: `XxxService`. Puertos de entrada: `IXxxService` o `IXxxQueryService` (segregados por cliente, ISP). Repositorios: `IXxxRepository`. Adaptadores externos: `XxxConnector`. DTOs: `CrearXxxDto`, `XxxResponseDto`. Eventos: nombres en pasado (`AlertaDisparada`, `PrecioActualizado`)|
+|**Estereotipos UML**|`<<service>>`, `<<repo>>`, `<<adapter>>`, `<<controller>>`, `<<gateway>>`, `<<dto>>`, `<<mapper>>`, `<<entity>>`, `<<value>>`, `<<port-in>>`, `<<port-out>>`|
+|**Visibilidad**|Repositorios y adaptadores se mantienen privados al módulo. Solo los puertos de entrada se exportan|
+|**Inmutabilidad**|DTOs y eventos son inmutables. Las entidades del dominio mutan únicamente a través de métodos que respetan invariantes|
+|**Errores**|Excepciones del dominio extienden una clase abstracta `DomainException`. La traducción a códigos HTTP se aísla en un filtro de la capa de presentación|
+|**Tipado del dominio**|Se usan *value objects* (`Address`, `TokenSymbol`, `Volume`, `Webhook`, `Umbral`) en lugar de tipos primitivos cuando el tipo aporta restricciones del dominio|
 
 </div>
 
@@ -33,220 +33,143 @@ El diseño de clases refina el [Análisis de clases](analisisClases.md) hasta el
 
 ## Capa de dominio (`domain/`)
 
-Independiente de NestJS, TypeORM y de cualquier framework. Solo TypeScript puro.
+Independiente de cualquier framework. Aloja únicamente entidades del dominio, objetos valor, eventos del dominio y excepciones del dominio.
 
 ### Entidades del dominio
 
-Cada entidad del [Modelo del dominio](../capitulo2/modeloDelDominio.md) se materializa como una clase TypeScript con **invariantes en el constructor** y métodos que mantienen la consistencia.
+Cada entidad del [Modelo del dominio](../capitulo2/modeloDelDominio.md) se materializa con sus invariantes encapsuladas en el constructor y métodos que mantienen la consistencia. Las máquinas de estado identificadas en el Capítulo 2 (`AlertaPrecio`, `Notificacion`) se implementan con un método de transición que valida la matriz de transiciones permitidas.
 
-```typescript
-export class Entidad {
-  constructor(
-    public readonly id: EntidadId,
-    private nombre: NombreEntidad,
-    private direcciones: Direccion[],
-  ) {
-    this.invariante();
-  }
-  cambiarNombre(nuevo: NombreEntidad): void { ... }
-  añadirDireccion(d: Direccion): void { ... }
-  eliminarDireccion(d: Direccion): void { ... }
-  private invariante(): void {
-    if (this.direcciones.length === 0) throw new EntidadSinDireccionesException();
-  }
-}
+<div align=center>
 
-export class AlertaPrecio {
-  constructor(
-    public readonly id: AlertaId,
-    public readonly token: Token,
-    public readonly umbral: Umbral,
-    public readonly webhook: Webhook,
-    private estado: EstadoAlerta = EstadoAlerta.OPERATIVA,
-  ) {}
-  evaluar(precio: Precio): boolean { ... }
-  marcarDisparada(): void { this.transitar(EstadoAlerta.DISPARADA); }
-  rearmar(): void { this.transitar(EstadoAlerta.OPERATIVA); }
-  marcarFallida(): void { this.transitar(EstadoAlerta.NOTIFICACION_FALLIDA); }
-  private transitar(destino: EstadoAlerta): void { ... }
-}
-```
+|Entidad|Atributos|Operaciones|Invariantes|
+|-|-|-|-|
+|`Entidad`|`id`, `nombre`, `direcciones`|`cambiarNombre`, `añadirDireccion`, `eliminarDireccion`|Nombre único, no vacío; al menos una dirección|
+|`Direccion`|`id`, `valor`, `entidad`|—|Formato `0x[a-f0-9]{40}`; pertenece a una sola entidad|
+|`AlertaPrecio`|`id`, `token`, `umbral`, `webhook`, `estado`|`evaluar`, `marcarDisparada`, `rearmar`, `marcarFallida`|Transiciones de estado restringidas (cf. *Diagrama de estados* del Cap. 2)|
+|`Notificacion`|`id`, `alerta`, `precioDisparador`, `instanteEmision`, `estadoEntrega`|`marcarEntregada`, `marcarFallida`|Transiciones del estado de entrega|
 
-> Las máquinas de estado (`AlertaPrecio`, `Notificacion`) ya identificadas en el Capítulo 2 se implementan con un método `transitar` que valida la matriz de transiciones permitidas.
+</div>
 
-### Objetos valor (Value Objects)
+### Objetos valor
 
 <div align=center>
 
 |Clase|Encapsula|Invariantes|
 |-|-|-|
-|`EntidadId`, `AlertaId`, `DireccionId`, `NotificacionId`|UUID v4|Formato UUID v4 válido|
-|`NombreEntidad`|`string`|Longitud 1..64, sin caracteres de control|
-|`TokenSymbol`|`string`|Solo `[A-Z0-9-]{1,16}`|
-|`Address`|`string`|Hexadecimal `0x[a-f0-9]{40}`|
-|`Volume`|`bigint`|Positivo, ≤ `10**24`|
-|`Precio`|`{ valor: number, instante: Date, token: Token }`|`valor > 0`, `instante` no futuro|
-|`Umbral`|`{ direccion: Cruce, valor: number }`|`Cruce ∈ {SUBE, BAJA}`, `valor > 0`|
-|`Webhook`|`URL`|HTTPS obligatorio (RS-10), longitud máxima 2048|
+|`EntidadId`, `AlertaId`, `DireccionId`, `NotificacionId`|UUID|Formato UUID v4 válido|
+|`NombreEntidad`|texto|Longitud 1..64, sin caracteres de control|
+|`TokenSymbol`|texto|`[A-Z0-9-]{1,16}`|
+|`Address`|texto|Hexadecimal `0x[a-f0-9]{40}`|
+|`Volume`|entero grande|Positivo, ≤ 10²⁴|
+|`Precio`|`{valor, instante, token}`|`valor > 0`, `instante` no futuro|
+|`Umbral`|`{cruce, valor}`|`cruce ∈ {SUBE, BAJA}`, `valor > 0`|
+|`Webhook`|URL|HTTPS obligatorio (RS-10), longitud ≤ 2048|
 
 </div>
 
 ### Eventos del dominio
 
-```typescript
-export abstract class DomainEvent {
-  abstract readonly eventName: string;
-  readonly ocurridoEn: Date = new Date();
-}
+Todos los eventos heredan de una clase abstracta `DomainEvent` con `eventName` y `ocurridoEn`. Son inmutables.
 
-export class OperacionRecibida extends DomainEvent {
-  readonly eventName = 'OperacionRecibida';
-  constructor(public readonly operacion: Operacion) { super(); }
-}
-export class PrecioActualizado extends DomainEvent { ... }
-export class AlertaDisparada extends DomainEvent { ... }
-export class NotificacionConfirmada extends DomainEvent { ... }
-export class NotificacionFallida extends DomainEvent { ... }
-```
+<div align=center>
+
+|Evento|Productor|Carga útil|
+|-|-|-|
+|`OperacionRecibida`|`HyperliquidConnector`|`Operacion`|
+|`PrecioActualizado`|`HyperliquidConnector`|`Token`, `Precio`|
+|`AlertaDisparada`|`PriceUpdateHandler`|`AlertaId`, `Precio`|
+|`NotificacionConfirmada`|`NotificacionService`|`NotificacionId`|
+|`NotificacionFallida`|`NotificacionService`|`NotificacionId`, motivo|
+
+</div>
 
 ### Excepciones del dominio
 
-`DomainException` (abstracta) → `EntidadDuplicadaException`, `DireccionYaAsignadaException`, `WebhookInaccesibleException`, `TransicionEstadoNoPermitida`, `AlertaNoEncontrada`, …
+`DomainException` (abstracta) es la raíz. Las subclases concretas son `EntidadDuplicadaException`, `DireccionYaAsignadaException`, `WebhookInaccesibleException`, `TransicionEstadoNoPermitida`, `AlertaNoEncontrada`, etc.
 
 ---
 
 ## Capa de aplicación (`application/`)
 
-Define los **puertos** y aloja los **servicios de aplicación** que implementan los CdU. No conoce a TypeORM, ioredis ni HTTP.
+Define los **puertos** y aloja los **servicios de aplicación** que realizan los CdU. No conoce TypeORM, ioredis ni HTTP.
 
-### Puertos de entrada (interfaces de servicio)
+### Puertos de entrada
 
-Cada control del análisis se traduce en una interfaz de puerto. Los controllers REST y los gateways WS dependen de la interfaz, no de la implementación.
+Cada control del análisis se traduce en una interfaz de puerto. Los controllers REST y los gateways WS dependen de la interfaz, nunca de la implementación.
 
-```typescript
-export interface IAlertasService {
-  crear(dto: CrearAlertaDto): Promise<AlertaResponseDto>;
-  listar(filtro: FiltroAlertaDto): Promise<AlertaResponseDto[]>;
-  editar(id: AlertaId, dto: EditarAlertaDto): Promise<AlertaResponseDto>;
-  eliminar(id: AlertaId): Promise<void>;
-}
+<div align=center>
 
-export interface ILeaderboardService {
-  obtenerSnapshot(q: ConsultaLeaderboardDto): Promise<FilaLeaderboardDto[]>;
-  suscribir(q: ConsultaLeaderboardDto, cliente: ClienteWS): Promise<Suscripcion>;
-}
+|Puerto de entrada|Operaciones expuestas|Cliente|
+|-|-|-|
+|`IAlertasService`|`crear`, `listar`, `editar`, `eliminar`|`AlertasController`|
+|`IAlertasQueryService`|`recuperarOperativasPara`|`PriceUpdateHandler` *(ISP)*|
+|`ICatalogoService`|`crearEntidad`, `listarEntidades`, `editarEntidad`, `eliminarEntidad`, `añadirDireccion`, `listarDirecciones`, `eliminarDireccion`|`EntidadesController`, `DireccionesController`|
+|`ICatalogoQueryService`|`resolverNombre`, `existeToken`|`LeaderboardService`, `AlertasService` *(ISP)*|
+|`ILeaderboardService`|`obtenerSnapshot`, `suscribir`|`LeaderboardGateway`|
+|`INotificacionService`|`enviar`|`AlertTriggeredHandler`|
 
-export interface ICatalogoService {
-  crearEntidad(dto: CrearEntidadDto): Promise<EntidadResponseDto>;
-  listarEntidades(filtro: string): Promise<EntidadResponseDto[]>;
-  resolverNombre(direccion: Address): Promise<string | null>;
-  ...
-}
-```
+</div>
 
-### Puertos de salida (interfaces de adaptador)
+> La aplicación del Principio de Segregación de Interfaces se materializa en parejas `IXxxService` / `IXxxQueryService`: el cliente solo depende del subconjunto de operaciones que usa.
 
-Definen **lo que la aplicación necesita** del exterior. La implementación reside en `infrastructure/`.
+### Puertos de salida
 
-```typescript
-export interface IAlertasRepository {
-  save(a: AlertaPrecio): Promise<void>;
-  findById(id: AlertaId): Promise<AlertaPrecio | null>;
-  findOperativasPorToken(t: TokenSymbol): Promise<AlertaPrecio[]>;
-  delete(id: AlertaId): Promise<void>;
-}
+Definen lo que la aplicación **necesita** del exterior. La implementación reside en `infrastructure/`.
 
-export interface ILeaderboardSnapshotRepository {
-  añadirOperacion(t: Terna, op: Operacion): Promise<void>;
-  obtenerTopN(t: Terna, n: number): Promise<FilaLeaderboard[]>;
-  purgarVentana(t: Terna, hasta: Date): Promise<void>;
-}
+<div align=center>
 
-export interface IWebhookConnector {
-  checkReachability(url: Webhook): Promise<boolean>;
-  transmitir(notificacion: Notificacion, url: Webhook): Promise<ResultadoTransmision>;
-}
+|Puerto de salida|Operaciones requeridas|Implementación|
+|-|-|-|
+|`IAlertasRepository`|`save`, `findById`, `findOperativasPorToken`, `delete`|`AlertasRepositoryTypeOrm`|
+|`IEntidadesRepository`, `IDireccionesRepository`|CRUD sobre la entidad correspondiente|`*RepositoryTypeOrm`|
+|`INotificacionesRepository`|`save`, `findPendientes`, `actualizarEstado`|`NotificacionesRepositoryTypeOrm`|
+|`ILeaderboardSnapshotRepository`|`añadirOperacion`, `obtenerTopN`, `purgarVentana`|`LeaderboardSnapshotRepositoryRedis`|
+|`IHyperliquidPort`|`suscribir`, `desuscribir`|`HyperliquidConnector`|
+|`IWebhookConnector`|`checkReachability`, `transmitir`|`WebhookConnectorHttp`|
+|`IRetryQueue`|`enqueue`, `consume`|`RetryQueueRedis`|
+|`IEventBus`|`emit`, `on`|`EventBusAdapter`|
 
-export interface IRetryQueue {
-  enqueue(payload: RetryPayload): Promise<void>;
-  consume(handler: (p: RetryPayload) => Promise<void>): void;
-}
-```
+</div>
 
 ### Servicios de aplicación
 
-Cada servicio implementa uno o varios puertos de entrada y orquesta la realización del CdU. Inyecta los puertos de salida que necesita.
+Cada servicio implementa uno o varios puertos de entrada y orquesta la realización del CdU; inyecta los puertos de salida que necesita. El cuerpo de cada operación se concretará en el Capítulo 4 — el diseño fija únicamente la firma, las dependencias y la transaccionalidad.
 
-```typescript
-@Injectable()
-export class AlertasService implements IAlertasService {
-  constructor(
-    private readonly alertas: IAlertasRepository,
-    private readonly catalogo: ICatalogoQueryService,
-    private readonly webhook: IWebhookConnector,
-    private readonly bus: IEventBus,
-  ) {}
+<div align=center>
 
-  @Transactional()
-  async crear(dto: CrearAlertaDto): Promise<AlertaResponseDto> {
-    const token = await this.catalogo.resolverToken(dto.token);
-    const alcanzable = await this.webhook.checkReachability(dto.webhook);
-    const alerta = AlertaPrecioMapper.fromDto(dto, token);
-    await this.alertas.save(alerta);
-    this.bus.emit(new AlertaCreada(alerta.id));
-    return AlertaPrecioMapper.toResponse(alerta, alcanzable);
-  }
-  // listar, editar, eliminar análogas
-}
+|Servicio|Implementa|Inyecta|Transaccionalidad|
+|-|-|-|-|
+|`AlertasService`|`IAlertasService`|`IAlertasRepository`, `ICatalogoQueryService`, `IWebhookConnector`, `IEventBus`|`@Transactional` en `crear`, `editar`, `eliminar`|
+|`CatalogoService`|`ICatalogoService`, `ICatalogoQueryService`|`IEntidadesRepository`, `IDireccionesRepository`, `IEventBus`|`@Transactional` en operaciones multi-entidad (alta entidad + direcciones iniciales)|
+|`LeaderboardService`|`ILeaderboardService`|`ILeaderboardSnapshotRepository`, `ICatalogoQueryService`, `IHyperliquidPort`|—|
+|`NotificacionService`|`INotificacionService`|`INotificacionesRepository`, `IWebhookConnector`, `IRetryQueue`, `IAlertasService`, `IEventBus`|`@Transactional` en `enviar` (persiste la `Notificacion` antes de transmitir, RS-09)|
+|`PriceUpdateHandler`|—|`IAlertasQueryService`, `AlertEvaluator`, `IEventBus`|`@OnEvent('PrecioActualizado')`|
+|`AlertTriggeredHandler`|—|`INotificacionService`|`@OnEvent('AlertaDisparada')`|
+|`OperationIngestionHandler`|—|`ILeaderboardSnapshotRepository`, `IEventBus`|`@OnEvent('OperacionRecibida')`|
+|`AlertEvaluator`|—|*(ninguna — estrategia pura)*|—|
+|`RetryWorker`|—|`IRetryQueue`, `INotificacionService`|*(consumidor bloqueante)*|
 
-@Injectable()
-export class PriceUpdateHandler {
-  constructor(
-    private readonly alertas: IAlertasQueryService,
-    private readonly evaluador: AlertEvaluator,
-    private readonly bus: IEventBus,
-  ) {}
-
-  @OnEvent('PrecioActualizado')
-  async handle(ev: PrecioActualizado): Promise<void> {
-    const operativas = await this.alertas.recuperarOperativasPara(ev.precio.token);
-    for (const a of operativas) if (this.evaluador.evaluar(a, ev.precio))
-      this.bus.emit(new AlertaDisparada(a.id, ev.precio));
-  }
-}
-```
+</div>
 
 ### DTOs y mappers
 
-Cada borde del sistema cruza con un DTO inmutable. Los mappers traducen entre DTOs ↔ entidades del dominio. **No** se exponen entidades del dominio sobre HTTP.
+Cada borde del sistema cruza con un DTO inmutable. Los mappers traducen entre DTOs ↔ entidades del dominio. **No se exponen entidades del dominio sobre HTTP** — esa es una regla del diseño que el código del Capítulo 4 deberá respetar.
 
-```typescript
-export class CrearAlertaDto {
-  @IsString() @Matches(/^[A-Z0-9-]{1,16}$/)
-  readonly token!: string;
-  @IsNumber() @IsPositive()
-  readonly umbral!: number;
-  @IsIn(['SUBE','BAJA'])
-  readonly cruce!: 'SUBE' | 'BAJA';
-  @IsUrl({ protocols: ['https'] })
-  readonly webhook!: string;
-}
+<div align=center>
 
-export class AlertaResponseDto {
-  readonly id!: string;
-  readonly token!: string;
-  readonly umbral!: number;
-  readonly cruce!: 'SUBE' | 'BAJA';
-  readonly estado!: 'OPERATIVA' | 'DISPARADA' | 'NOTIFICACION_FALLIDA';
-  readonly webhookAlcanzable!: boolean;
-  // url del webhook NUNCA se serializa de vuelta (RS-10)
-}
+|DTO|Sentido|Validación|Notas|
+|-|-|-|-|
+|`CrearAlertaDto`|Entrada|`token` formato `[A-Z0-9-]{1,16}`, `umbral > 0`, `cruce ∈ {SUBE,BAJA}`, `webhook` URL HTTPS|—|
+|`EditarAlertaDto`|Entrada|Campos opcionales con las mismas reglas|—|
+|`AlertaResponseDto`|Salida|—|**Nunca** incluye la URL del webhook (RS-10); sí incluye `webhookAlcanzable`|
+|`CrearEntidadDto`, `EditarEntidadDto`, `EntidadResponseDto`|—|Nombre 1..64, sin caracteres de control|—|
+|`CrearDireccionDto`, `DireccionResponseDto`|—|Formato hex `0x...`|—|
+|`ConsultaLeaderboardDto`|Entrada (WS)|`mercado`, `token`, `temporalidad` válidos|—|
+|`FilaLeaderboardDto`|Salida (WS)|—|Incluye `direccion`, `nombreResuelto?`, `volumenCompra`, `volumenVenta`|
 
-export class AlertaPrecioMapper {
-  static fromDto(dto: CrearAlertaDto, token: Token): AlertaPrecio { ... }
-  static toResponse(a: AlertaPrecio, alcanzable: boolean): AlertaResponseDto { ... }
-}
-```
+</div>
+
+Los mappers correspondientes (`AlertaPrecioMapper`, `EntidadMapper`, `NotificacionMapper`, …) son clases sin estado con métodos `fromDto`/`toResponse` o `fromOrm`/`toOrm`.
 
 ---
 
@@ -254,142 +177,53 @@ export class AlertaPrecioMapper {
 
 Implementa los puertos de salida. El núcleo no conoce esta capa.
 
-### Repositorios (PostgreSQL via TypeORM)
+### Adaptadores de persistencia
 
-```typescript
-@Injectable()
-export class AlertasRepositoryTypeOrm implements IAlertasRepository {
-  constructor(
-    @InjectRepository(AlertaOrmEntity)
-    private readonly repo: Repository<AlertaOrmEntity>,
-  ) {}
+<div align=center>
 
-  async save(a: AlertaPrecio): Promise<void> {
-    const orm = AlertaOrmMapper.toOrm(a);
-    await this.repo.save(orm);
-  }
-  async findOperativasPorToken(t: TokenSymbol): Promise<AlertaPrecio[]> {
-    const rows = await this.repo.find({ where: { token: t.value, estado: 'OPERATIVA' } });
-    return rows.map(AlertaOrmMapper.fromOrm);
-  }
-  ...
-}
-```
+|Adaptador|Implementa|Tecnología|Notas|
+|-|-|-|-|
+|`AlertasRepositoryTypeOrm`|`IAlertasRepository`|TypeORM sobre PostgreSQL|Trabaja con `AlertaOrmEntity` y traduce vía `AlertaOrmMapper`|
+|`EntidadesRepositoryTypeOrm`, `DireccionesRepositoryTypeOrm`|`IEntidadesRepository`, `IDireccionesRepository`|TypeORM|—|
+|`NotificacionesRepositoryTypeOrm`|`INotificacionesRepository`|TypeORM|—|
+|`LeaderboardSnapshotRepositoryRedis`|`ILeaderboardSnapshotRepository`|ioredis sobre Redis 7 (Sorted Set)|Esquema de claves en [Modelo de datos](modeloDeDatos.md)|
+|`RetryQueueRedis`|`IRetryQueue`|ioredis sobre Redis 7 (List, `LPUSH`/`BRPOP`)|Backoff exponencial gestionado por `RetryWorker`|
 
-> El `AlertaOrmEntity` es una clase distinta de `AlertaPrecio`. La entidad ORM lleva los decoradores `@Entity`, `@Column`, `@Index`. La entidad del dominio queda libre de tecnología. El `AlertaOrmMapper` traduce en ambos sentidos.
+</div>
 
-### Repositorio Redis para el leaderboard
-
-```typescript
-@Injectable()
-export class LeaderboardSnapshotRepositoryRedis implements ILeaderboardSnapshotRepository {
-  constructor(@InjectRedis() private readonly redis: Redis) {}
-
-  async añadirOperacion(t: Terna, op: Operacion): Promise<void> {
-    const key = this.keyDe(t);
-    await this.redis.zincrby(key, Number(op.volumen), op.direccion.value);
-    await this.redis.zremrangebyscore(`${key}:tiempos`, 0, t.ventana.desde.getTime());
-  }
-  async obtenerTopN(t: Terna, n: number): Promise<FilaLeaderboard[]> { ... }
-  private keyDe(t: Terna): string { return `lb:${t.mercado}:${t.token}:${t.temporalidad}`; }
-}
-```
+> Las clases ORM (`AlertaOrmEntity`, etc.) son distintas de las entidades del dominio: llevan los decoradores de mapeo y se mantienen exclusivamente en `infrastructure/`. Los mappers ORM (`AlertaOrmMapper`, …) traducen en ambos sentidos. La entidad del dominio queda libre de tecnología.
 
 ### Adaptadores de sistemas externos
 
-```typescript
-@Injectable()
-export class HyperliquidConnector implements IHyperliquidPort {
-  constructor(
-    private readonly bus: IEventBus,
-    private readonly cfg: ConfigService,
-  ) { this.connect(); }
+<div align=center>
 
-  private async connect(): Promise<void> {
-    const ws = new WebSocket(this.cfg.get('HYPERLIQUID_WS_URL')!);
-    ws.on('message', (data) => this.onMessage(data));
-    ...
-  }
-  private onMessage(raw: WebSocket.Data): void {
-    const msg = HyperliquidMessageParser.parse(raw);
-    if (msg.type === 'trade')   this.bus.emit(new OperacionRecibida(msg.toOperacion()));
-    if (msg.type === 'tick')    this.bus.emit(new PrecioActualizado(msg.toPrecio()));
-  }
-}
-```
+|Adaptador|Implementa|Protocolo|Función|
+|-|-|-|-|
+|`HyperliquidConnector`|`IHyperliquidPort`|WebSocket|Mantiene la conexión con Hyperliquid L1 y publica `OperacionRecibida` y `PrecioActualizado` en el bus. **Único punto del sistema que conoce el protocolo**: sustituirlo por un adaptador para nodo no validador (RS-08) es cambiar la implementación inyectada|
+|`WebhookConnectorHttp`|`IWebhookConnector`|HTTPS POST/HEAD|Comprueba alcanzabilidad y transmite notificaciones al webhook receptor. Cifrado/descifrado de la URL ocurre exclusivamente al traspasar la frontera (RS-10)|
+|`HyperliquidMessageParser`|—|—|Parser puro de los mensajes de Hyperliquid; testeable sin red|
 
-> El `HyperliquidConnector` es el **único punto del sistema que conoce el protocolo de Hyperliquid**. Sustituirlo por un adaptador para nodo no validador (RS-08) es cambiar la implementación inyectada para `IHyperliquidPort` en `IngestionModule`.
-
-```typescript
-@Injectable()
-export class WebhookConnectorHttp implements IWebhookConnector {
-  constructor(private readonly http: HttpService) {}
-
-  async checkReachability(url: Webhook): Promise<boolean> {
-    try { await firstValueFrom(this.http.head(url.value, { timeout: 3000 })); return true; }
-    catch { return false; }
-  }
-  async transmitir(n: Notificacion, url: Webhook): Promise<ResultadoTransmision> {
-    try {
-      const res = await firstValueFrom(
-        this.http.post(url.value, NotificacionMapper.toWebhookPayload(n), { timeout: 5000 })
-      );
-      return res.status >= 200 && res.status < 300 ? Resultado.OK : Resultado.FALLO;
-    } catch { return Resultado.FALLO; }
-  }
-}
-```
+</div>
 
 ---
 
 ## Capa de presentación (`presentation/`)
 
-### REST controllers
+### Controladores REST y gateways WebSocket
 
-```typescript
-@Controller('alertas')
-@UseFilters(DomainExceptionFilter)
-export class AlertasController {
-  constructor(private readonly svc: IAlertasService) {}
+<div align=center>
 
-  @Post()
-  async crear(@Body() dto: CrearAlertaDto): Promise<AlertaResponseDto> {
-    return this.svc.crear(dto);
-  }
-  @Get()
-  async listar(@Query() filtro: FiltroAlertaDto): Promise<AlertaResponseDto[]> {
-    return this.svc.listar(filtro);
-  }
-  @Patch(':id')
-  async editar(@Param('id') id: string, @Body() dto: EditarAlertaDto): Promise<AlertaResponseDto> {
-    return this.svc.editar(AlertaId.parse(id), dto);
-  }
-  @Delete(':id') @HttpCode(204)
-  async eliminar(@Param('id') id: string): Promise<void> {
-    return this.svc.eliminar(AlertaId.parse(id));
-  }
-}
-```
+|Clase|Estereotipo|Tipo de adaptador|Operaciones expuestas|Depende de|
+|-|-|-|-|-|
+|`AlertasController`|`<<controller>>`|REST `/alertas`|`POST`, `GET`, `PATCH`, `DELETE`|`IAlertasService`|
+|`EntidadesController`|`<<controller>>`|REST `/entidades`|CRUD|`ICatalogoService`|
+|`DireccionesController`|`<<controller>>`|REST `/entidades/:id/direcciones`|`POST`, `GET`, `DELETE`|`ICatalogoService`|
+|`LeaderboardGateway`|`<<gateway>>`|WS `/ws/leaderboard`|`subscribe-leaderboard`, `unsubscribe-leaderboard`; reenvía `LeaderboardActualizado`|`ILeaderboardService`, `EventBus`|
+|`DomainExceptionFilter`|`<<filter>>`|—|Traduce `DomainException` a códigos HTTP (404, 409, 422)|—|
 
-### WebSocket gateway
+</div>
 
-```typescript
-@WebSocketGateway({ path: '/ws/leaderboard' })
-export class LeaderboardGateway {
-  constructor(private readonly svc: ILeaderboardService) {}
-
-  @SubscribeMessage('subscribe-leaderboard')
-  async onSubscribe(@MessageBody() q: ConsultaLeaderboardDto, @ConnectedSocket() c: Socket): Promise<void> {
-    const sub = await this.svc.suscribir(q, new ClienteWSAdapter(c));
-    c.on('disconnect', () => sub.cancel());
-  }
-
-  @OnEvent('LeaderboardActualizado')
-  notificar(ev: LeaderboardActualizado): void {
-    this.broadcastA(ev.terna, ev.delta);
-  }
-}
-```
+> Los controladores reciben DTOs validados estructuralmente por el framework de validación; las reglas de negocio se validan en los servicios de aplicación (separación que se hereda del [Diseño de los CdU](disenoCdU.md)).
 
 ---
 
@@ -400,9 +234,9 @@ export class LeaderboardGateway {
 |Principio|Manifestación en el diseño|
 |-|-|
 |**S**RP — Single Responsibility|Cada clase tiene un propósito (crear alertas, evaluar precios, persistir, transmitir). `AlertasService` no conoce HTTP; `AlertasController` no conoce TypeORM|
-|**O**CP — Open/Closed|Añadir un nuevo tipo de alerta requiere implementar la interfaz `IEvaluadorAlerta` y registrarlo en el contenedor; no se modifican `PriceUpdateHandler` ni `AlertEvaluator` existentes|
+|**O**CP — Open/Closed|Añadir un nuevo tipo de alerta requiere implementar `IEvaluadorAlerta` y registrarlo en el contenedor; no se modifican `PriceUpdateHandler` ni `AlertEvaluator` existentes|
 |**L**SP — Liskov Substitution|`HyperliquidConnector` y un futuro `NodoNoValidadorConnector` cumplen `IHyperliquidPort`; sustituir uno por otro no rompe a `IngestionModule`|
-|**I**SP — Interface Segregation|`ICatalogoService` (cliente: presentación) e `ICatalogoQueryService` (cliente: leaderboard, alertas) son interfaces distintas, aunque las implemente el mismo `CatalogoService`. Cada cliente depende solo de lo que usa|
+|**I**SP — Interface Segregation|`ICatalogoService` (cliente: presentación) e `ICatalogoQueryService` (cliente: leaderboard, alertas) son interfaces distintas, aunque las implemente el mismo servicio. Análogo `IAlertasService` / `IAlertasQueryService`|
 |**D**IP — Dependency Inversion|Todas las capas hacia adentro dependen de interfaces, no de implementaciones. La inyección se resuelve en los `@Module` con providers `{ provide: 'IXxx', useClass: XxxImpl }`|
 
 </div>
@@ -416,7 +250,7 @@ export class LeaderboardGateway {
 |**Repository**|`IAlertasRepository`, `IEntidadesRepository`, `ILeaderboardSnapshotRepository`|Encapsular acceso a la persistencia detrás de una interfaz del dominio|
 |**Adapter**|`HyperliquidConnector`, `WebhookConnectorHttp`, `LeaderboardSnapshotRepositoryRedis`|Aislar el núcleo del protocolo concreto del exterior|
 |**Strategy**|`AlertEvaluator` con futuras subclases por tipo de alerta|Permitir nuevos tipos de alerta sin tocar el handler|
-|**Observer / Pub-Sub**|`@OnEvent` sobre el `EventBus`|Desacoplar productores y consumidores de eventos|
+|**Observer / Pub-Sub**|Subscripciones declarativas de eventos sobre el bus|Desacoplar productores y consumidores|
 |**Template Method**|`DomainEvent` (base) con `eventName` abstracto|Estandarizar la forma de los eventos del dominio|
 |**Command**|`CrearAlertaDto`, `EditarAlertaDto`|Encapsular la solicitud junto con sus parámetros, validable y serializable|
 |**DTO + Mapper**|En cada borde del sistema|Evitar fugas del modelo de dominio hacia HTTP, BD o eventos|
@@ -464,14 +298,14 @@ export class LeaderboardGateway {
 
 |Clase de análisis|Clase(s) de diseño|Mecanismo|
 |-|-|-|
-|`VistaLeaderboard`|`LeaderboardView` (React) + `LeaderboardClient` (cliente WS)|Componente UI + cliente de protocolo|
+|`VistaLeaderboard`|`LeaderboardView` (componente de UI) + `LeaderboardClient` (cliente WS)|Componente UI + cliente de protocolo|
 |`VistaEntidades`|`EntidadesListView`, `EntidadFormView`, `DireccionFormView`|Descomposición en componentes|
 |`VistaAlertas`|`AlertasListView`, `AlertaFormView`|Descomposición en componentes|
-|`ConectorHyperliquid`|`HyperliquidConnector` *(impl)* + `IHyperliquidPort` *(interfaz)*|Adapter|
+|`ConectorHyperliquid`|`HyperliquidConnector` *(impl.)* + `IHyperliquidPort` *(interfaz)*|Adapter|
 |`ConectorWebhook`|`WebhookConnectorHttp` + `IWebhookConnector`|Adapter|
 |`GestorConsultaLeaderboard`|`LeaderboardService` + `OperationIngestionHandler`|Service + Event handler|
 |`GestorCatalogoEntidades`|`CatalogoService` + `EntidadesRepository` + `DireccionesRepository`|Service + Repositorios|
-|`GestorAlertasPrecio`|`AlertasService` + `AlertasRepository` + `AlertasQueryService`|Service + Repositorios + interfaz especializada (ISP)|
+|`GestorAlertasPrecio`|`AlertasService` + `AlertasRepository` + `IAlertasQueryService`|Service + Repositorio + interfaz especializada (ISP)|
 |`GestorEvaluacionAlertas`|`PriceUpdateHandler` + `AlertEvaluator`|Handler + estrategia pura|
 |`GestorEnvioNotificacion`|`AlertTriggeredHandler` + `NotificacionService` + `RetryWorker`|Handler + Service + Worker para reintentos|
 |`LeaderboardEnVivo`|`LeaderboardSnapshotRepositoryRedis` + estructura Sorted Set|Repository + Estructura Redis|
@@ -486,10 +320,10 @@ export class LeaderboardGateway {
 |Criterio|Comprobación|
 |-|-|
 |**Trazabilidad con análisis**|Cada clase de diseño se mapea a un rol de análisis. Cero clases huérfanas|
-|**Inversión de dependencias**|Servicios de aplicación dependen de interfaces de puerto, no de TypeORM ni ioredis|
-|**Tipado del dominio**|`Address`, `TokenSymbol`, `Volume` aparecen en lugar de `string` y `number` desnudos|
-|**Encapsulación de mecanismos**|Eventos: solo en `domain/events/`. Persistencia: solo en `infrastructure/repositories/`. HTTP: solo en `presentation/http/`|
-|**Cero dependencias inversas**|`domain/` no importa nada de `application/`, `infrastructure/` ni `presentation/`. Validable con ESLint regla `no-restricted-imports`|
+|**Inversión de dependencias**|Servicios de aplicación dependen de interfaces de puerto, no de tecnología concreta|
+|**Tipado del dominio**|`Address`, `TokenSymbol`, `Volume` aparecen en lugar de tipos primitivos|
+|**Encapsulación de mecanismos**|Eventos: solo en `domain/events/`. Persistencia: solo en `infrastructure/persistence/`. HTTP: solo en `presentation/http/`|
+|**Cero dependencias inversas**|`domain/` no importa nada de las capas externas — comprobable con regla estática (cf. [Diseño de paquetes](disenoPaquetes.md))|
 
 </div>
 
@@ -500,7 +334,7 @@ export class LeaderboardGateway {
 |Hacia|Compromiso|
 |-|-|
 |[Diseño de paquetes](disenoPaquetes.md)|La estructura de carpetas refleja la separación dominio/aplicación/infraestructura/presentación|
-|[Modelo de datos](modeloDeDatos.md)|Cada `XxxOrmEntity` se materializa en una tabla; los `Sorted Set` Redis siguen el esquema de claves|
-|Capítulo 4|Las firmas TypeScript son ejecutables: el código se obtiene completando los cuerpos de método|
+|[Modelo de datos](modeloDeDatos.md)|Cada `XxxOrmEntity` se materializa en una tabla; los `Sorted Set` de Redis siguen el esquema de claves|
+|Capítulo 4|Las firmas y contratos aquí fijados son el contrato de implementación: el código se obtiene completando los cuerpos de método sin alterar el esqueleto|
 
 </div>

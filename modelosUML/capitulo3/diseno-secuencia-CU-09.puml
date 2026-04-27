@@ -12,7 +12,7 @@ participant "EventBus" as BUS
 
 U -> VIEW : completar formulario
 VIEW -> CTRL : POST /api/alertas\nCrearAlertaDto
-CTRL -> CTRL : validar (class-validator)
+CTRL -> CTRL : validar (estructural)
 
 CTRL -> SVC : crear(dto)
 activate SVC

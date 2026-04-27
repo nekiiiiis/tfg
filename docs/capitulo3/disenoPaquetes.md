@@ -232,30 +232,18 @@ backend/src/
 
 ## Reglas de dependencia entre carpetas
 
-La separación hexagonal solo es útil si se hace **comprobable**. Dos mecanismos garantizan que ningún import cruce la frontera prohibida:
+La separación hexagonal solo es útil si se hace **comprobable**. El diseño fija dos mecanismos —ambos materializables en el Capítulo 4— que garantizan que ningún *import* cruce la frontera prohibida:
 
-### Mecanismo 1 — `paths` de TypeScript
+<div align=center>
 
-Los aliases en `tsconfig.json` impiden imports relativos largos y dejan visible la capa de cada import:
+|Mecanismo|Función|
+|-|-|
+|**Aliases por capa**|Cada capa hexagonal expone un alias único (`@domain`, `@application`, `@infrastructure`, `@presentation`, `@shared`). Cualquier import revela explícitamente la capa de origen, lo que vuelve obvia una dependencia ilegítima en cualquier revisión|
+|**Regla estática de imports**|Una regla de análisis estático rechaza, en *lint* y en *CI*, los imports que violen la matriz de dependencias permitidas|
 
-```json
-{
-  "compilerOptions": {
-    "baseUrl": "./src",
-    "paths": {
-      "@domain/*":         ["domain/*"],
-      "@application/*":    ["application/*"],
-      "@infrastructure/*": ["infrastructure/*"],
-      "@presentation/*":   ["presentation/*"],
-      "@shared/*":         ["shared/*"]
-    }
-  }
-}
-```
+</div>
 
-### Mecanismo 2 — Reglas ESLint `no-restricted-imports`
-
-Cada capa declara qué capas externas puede importar. La regla rechaza imports prohibidos en tiempo de lint y de CI.
+### Matriz de dependencias permitidas
 
 <div align=center>
 
@@ -269,23 +257,7 @@ Cada capa declara qué capas externas puede importar. La regla rechaza imports p
 
 </div>
 
-```javascript
-module.exports = {
-  overrides: [
-    { files: ['src/domain/**'], rules: {
-      'no-restricted-imports': ['error', { patterns: ['@application/*','@infrastructure/*','@presentation/*'] }]
-    }},
-    { files: ['src/application/**'], rules: {
-      'no-restricted-imports': ['error', { patterns: ['@infrastructure/*','@presentation/*'] }]
-    }},
-    { files: ['src/presentation/**'], rules: {
-      'no-restricted-imports': ['error', { patterns: ['@infrastructure/*'] }]
-    }},
-  ],
-};
-```
-
-> Esta regla impide concretamente que un controller importe TypeORM (presentation → infrastructure prohibido), o que un servicio de aplicación importe ioredis (application → infrastructure prohibido). Es la materialización ejecutable de la regla de dependencia hexagonal.
+> Las violaciones más relevantes que esta regla impide son: que un *controller* importe directamente la tecnología de persistencia (`presentation/` → `infrastructure/`), o que un servicio de aplicación importe el cliente de Redis (`application/` → `infrastructure/`). Es la materialización ejecutable de la regla de dependencia hexagonal y la condición que permite invertir la dependencia mediante la inyección de los puertos.
 
 ## Estructura del frontend en detalle
 
@@ -358,11 +330,11 @@ El siguiente diagrama refleja la materialización física de los paquetes de an�
 
 |Criterio|Comprobación|
 |-|-|
-|**Aciclicidad**|`madge --circular backend/src` integrado en CI. Cualquier ciclo bloquea el merge|
-|**Regla de capas**|ESLint con `no-restricted-imports` por carpeta. Lint failing en CI|
+|**Aciclicidad**|El grafo de dependencias entre carpetas es un DAG. Cualquier ciclo introducido se detecta por análisis estático y se trata como defecto del diseño|
+|**Regla de capas**|Cada *import* respeta la matriz de dependencias permitidas. La comprobación se hace en *lint* y se bloquea en *CI*|
 |**Trazabilidad con análisis**|Cada paquete de análisis tiene su carpeta correspondiente. Cero paquetes huérfanos en cualquier dirección|
-|**Tamaño de carpeta**|Ningún submódulo dentro de una capa supera ~10 ficheros. Si crece más, se descompone por subcaso|
-|**Cohesión por feature**|Frontend: cada *feature* es autocontenida (componentes, hooks, API client) y se borra como unidad si la feature desaparece|
+|**Tamaño de carpeta**|Ningún submódulo dentro de una capa supera el orden de la decena de ficheros. Si crece más, se descompone por subcaso|
+|**Cohesión por feature**|Frontend: cada *feature* es autocontenida (componentes, hooks, cliente de API) y se borra como unidad si la feature desaparece|
 
 </div>
 

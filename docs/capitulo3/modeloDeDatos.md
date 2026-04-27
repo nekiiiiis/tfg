@@ -175,26 +175,19 @@ CREATE INDEX eventos_auditoria_nombre ON eventos_auditoria (nombre, ocurrido_en 
 
 ### Cifrado de webhooks (RS-10)
 
-```sql
--- al insertar
-INSERT INTO alertas (..., webhook_url_enc)
-VALUES (..., pgp_sym_encrypt('https://example.com/hook', current_setting('app.secret')));
-
--- al recuperar
-SELECT pgp_sym_decrypt(webhook_url_enc, current_setting('app.secret'))::text AS url
-FROM alertas WHERE id = $1;
-```
-
 <div align=center>
 
 |Aspecto|Decisión|
 |-|-|
-|Algoritmo|`pgp_sym_encrypt` (extensión `pgcrypto`) con AES-CFB 256|
-|Clave maestra|Variable de entorno `APP_SECRET`, inyectada como `app.secret` en cada conexión|
-|Ámbito de cifrado|Solo el campo `webhook_url_enc`. El resto de columnas no es sensible|
-|Rotación|Se contempla como tarea de operación; no automatizada en el alcance del TFG|
+|Algoritmo|Cifrado simétrico autenticado provisto por la extensión `pgcrypto` de PostgreSQL (`pgp_sym_encrypt` / `pgp_sym_decrypt`, AES-CFB 256)|
+|Clave maestra|Externalizada al entorno del proceso (`APP_SECRET`); nunca se persiste con los datos|
+|Ámbito de cifrado|Únicamente el campo `webhook_url_enc`. El resto de columnas no contiene información sensible|
+|Punto de cifrado/descifrado|En el repositorio de la capa de infraestructura. La capa de aplicación maneja el `Webhook` ya descifrado durante el tiempo mínimo necesario; nunca se loguea ni se serializa de vuelta al cliente|
+|Rotación|Tarea de operación, no automatizada en el alcance del TFG|
 
 </div>
+
+> Las invocaciones SQL concretas (`INSERT … pgp_sym_encrypt(...)` y `SELECT pgp_sym_decrypt(...)`) son detalles de implementación que el Capítulo 4 incorporará en el repositorio TypeORM correspondiente.
 
 ## Redis — Estructuras y claves
 
@@ -202,70 +195,42 @@ Redis sostiene dos estructuras: el **snapshot del leaderboard** (Sorted Set) y l
 
 ### Snapshot del leaderboard
 
-```text
-KEY        : lb:{mercado}:{token}:{temporalidad}
-TYPE       : ZSET (Sorted Set)
-ELEMENT    : direccion (string "0x...")
-SCORE      : volumen_acumulado (float64)
+<div align=center>
 
-KEY        : lb:{mercado}:{token}:{temporalidad}:tiempos
-TYPE       : ZSET
-ELEMENT    : op_id (UUID)
-SCORE      : timestamp_ms (int64)
-```
+|Aspecto|Diseño|
+|-|-|
+|Estructura|*Sorted Set* (ZSET) por terna `(mercado, token, temporalidad)`. Cada elemento es una dirección; el *score* es el volumen acumulado dentro de la ventana|
+|Patrón de clave|`lb:{mercado}:{token}:{temporalidad}` para el ZSET principal y `lb:{mercado}:{token}:{temporalidad}:tiempos` para el ZSET auxiliar de timestamps por operación|
+|Lectura|*Top-N* del leaderboard servido por la operación nativa de rango invertido del ZSET en O(log N + M) — suficiente para RS-01|
+|Escritura|Incremento atómico del *score* de la dirección al recibir cada `OperacionRecibida`; alta del timestamp en el ZSET auxiliar|
+|Purga|Al insertar, las operaciones más antiguas que la ventana deslizante se eliminan del ZSET auxiliar; los volúmenes correspondientes se decrementan en el ZSET principal|
 
-#### Operaciones
-
-```bash
-# inserción de operación (atómica con MULTI/EXEC)
-ZINCRBY lb:Spot:HYPE:5m  1500.0  0xabc...
-ZADD    lb:Spot:HYPE:5m:tiempos  1714234567000  e7f3...
-
-# purga de operaciones más antiguas que la ventana
-ZREMRANGEBYSCORE lb:Spot:HYPE:5m:tiempos -inf  (now - 5m)
-# (la app reduce el score correspondiente en lb:* tras leer las purgadas)
-
-# top-N para el snapshot (CU-01)
-ZREVRANGEBYSCORE lb:Spot:HYPE:5m  +inf  -inf  WITHSCORES  LIMIT 0 50
-```
+</div>
 
 <div align=center>
 
 |Decisión|Justificación|
 |-|-|
-|Sorted Set indexado por dirección con `score = volumen`|`ZREVRANGE` resuelve el top-N en O(log N + M); RS-01 satisfecho con margen|
-|Clave compuesta `{mercado}:{token}:{temporalidad}`|Permite mantener leaderboards independientes en paralelo|
-|Sorted Set auxiliar `:tiempos`|La purga por ventana deslizante exige conocer el instante de cada operación; el ZSET principal solo tiene volumen|
-|AOF (Append-Only File) habilitado en Redis|RS-03: el leaderboard sobrevive a un reinicio del contenedor; el "calentamiento" se reduce al desfase de la AOF (segundos)|
-|Sin TTL global|La purga manual por ventana es más precisa que un TTL; si la ventana es 24h, un TTL invalidaría datos antes de la purga lógica|
+|Sorted Set indexado por dirección con `score = volumen`|La consulta del *top-N* es logarítmica; RS-01 satisfecho con margen|
+|Clave compuesta `{mercado}:{token}:{temporalidad}`|Permite mantener leaderboards independientes en paralelo sin colisiones|
+|Sorted Set auxiliar `:tiempos`|La purga por ventana deslizante exige conocer el instante de cada operación; el ZSET principal solo lleva volumen|
+|AOF (Append-Only File) habilitado|RS-03: el leaderboard sobrevive al reinicio del contenedor; el calentamiento tras *restart* se reduce al desfase de la AOF (segundos)|
+|Sin TTL global|La purga manual por ventana es más precisa que un TTL; éste invalidaría datos antes de tiempo cuando la ventana es larga|
 
 </div>
 
 ### Cola de reintentos de notificaciones (RS-07)
 
-```text
-KEY        : notif:retry
-TYPE       : LIST (FIFO)
-ELEMENT    : payload JSON { "notificacionId": UUID, "intento": N, "proximoIntento": ISO8601 }
-```
-
-#### Operaciones
-
-```bash
-# encolar (en fallo de transmisión)
-LPUSH notif:retry  '{"notificacionId":"...","intento":1,"proximoIntento":"2026-01-01T00:00:01Z"}'
-
-# consumir (worker bloqueante)
-BRPOP notif:retry  0
-```
-
 <div align=center>
 
-|Aspecto|Decisión|
+|Aspecto|Diseño|
 |-|-|
-|Backoff exponencial|Intentos 1..6 con esperas 1s, 5s, 30s, 5min, 30min, 1h. El consumidor verifica `proximoIntento` y, si aún no llega, **reencola** con LPUSH (no consume hasta su tiempo)|
-|Persistencia|AOF habilitado. La cola sobrevive a reinicios|
-|Tope de intentos|6. Tras el sexto fallo, la alerta queda definitivamente en `NOTIFICACION_FALLIDA` y exige acción manual|
+|Estructura|Lista (LIST) FIFO accedida con bloqueo en consumo (`LPUSH` por el productor, *blocking pop* por el *worker*)|
+|Clave|`notif:retry`|
+|Carga útil|Identificador de la notificación, número de intento y marca temporal del próximo intento|
+|Backoff|Exponencial: 1 s, 5 s, 30 s, 5 min, 30 min, 1 h. El *worker* verifica el siguiente intento y reencola si aún no le toca|
+|Persistencia|AOF habilitado: la cola sobrevive al reinicio del contenedor|
+|Tope de intentos|6. Tras el sexto fallo, la alerta queda en `NOTIFICACION_FALLIDA` y exige intervención manual|
 
 </div>
 
@@ -281,24 +246,11 @@ BRPOP notif:retry  0
 
 </div>
 
-## Migraciones y semilla
+## Estrategia de versionado del esquema
 
-Las migraciones de PostgreSQL se generan con TypeORM (`typeorm migration:generate`) y residen en `backend/src/infrastructure/persistence/postgres/migrations/`. Cada migración cubre un cambio atómico del esquema y es reversible.
+El esquema se evoluciona mediante **migraciones reversibles** versionadas: cada cambio del modelo de datos (alta de tabla, índice, columna o tipo) se materializa en una migración atómica que se aplica de forma ordenada. El conjunto inicial de migraciones cubre, en este orden lógico, las extensiones del SGBD (`pgcrypto`), los tipos enumerados (`estado_alerta`, `cruce`, `estado_entrega`), las tablas del catálogo (`entidades`, `direcciones`), la tabla `alertas`, la tabla `notificaciones` y la tabla opcional `eventos_auditoria`.
 
-<div align=center>
-
-|Migración inicial|Contenido|
-|-|-|
-|`001-extensions.ts`|`CREATE EXTENSION pgcrypto;`|
-|`002-types.ts`|Tipos `estado_alerta`, `cruce`, `estado_entrega`|
-|`003-tablas-catalogo.ts`|Tablas `entidades`, `direcciones`, índices, triggers|
-|`004-tabla-alertas.ts`|Tabla `alertas` con índices|
-|`005-tabla-notificaciones.ts`|Tabla `notificaciones` con índices|
-|`006-tabla-auditoria.ts`|Tabla `eventos_auditoria`|
-
-</div>
-
-> No se prevé seed de datos: el sistema parte vacío y se puebla por la actividad del Usuario y el flujo de Hyperliquid.
+> El sistema parte sin datos de semilla: se puebla por la actividad del Usuario (catálogo, alertas) y por el flujo entrante desde Hyperliquid. La generación, ubicación y código de cada migración son detalles de implementación que se entregan en el Capítulo 4.
 
 ## Políticas de retención
 
@@ -321,7 +273,7 @@ Las migraciones de PostgreSQL se generan con TypeORM (`typeorm migration:generat
 |Criterio|Comprobación|
 |-|-|
 |**Trazabilidad con el dominio**|Cada entidad persistente del dominio tiene su tabla. `LeaderboardEnVivo` se modela en Redis con justificación documentada|
-|**Cumplimiento de RS**|RS-01 vía Redis Sorted Set; RS-02 vía índice `(token_simbolo, estado)`; RS-09 vía persistencia de notificaciones; RS-10 vía `pgp_sym_encrypt`|
+|**Cumplimiento de RS**|RS-01 vía *Sorted Set* en Redis; RS-02 vía índice `(token_simbolo, estado)`; RS-09 vía persistencia de notificaciones; RS-10 vía cifrado simétrico del campo `webhook_url_enc` con clave maestra externalizada|
 |**Recuperación tras reinicio**|PostgreSQL durable por defecto; Redis con AOF — el leaderboard se calienta en segundos tras restart|
 |**Atomicidad**|Operaciones multi-tabla (creación de entidad con direcciones iniciales) en transacción ACID; operaciones Redis multi-clave en `MULTI/EXEC`|
 |**Consultas críticas con índice**|`alertas (token_simbolo, estado)`, `direcciones (entidad_id)`, `notif (alerta_id)`, `notif_pendientes`|
@@ -338,6 +290,6 @@ Las migraciones de PostgreSQL se generan con TypeORM (`typeorm migration:generat
 |[Diseño de la arquitectura](disenoArquitectura.md)|Esta especificación|Decisión PostgreSQL+Redis se concreta en esquema y claves|
 |[Diseño de clases](disenoClases.md)|Tablas|Cada `XxxOrmEntity` se mapea a su tabla; cada `XxxOrmMapper` traduce entre dominio y ORM|
 |RS-01, RS-02, RS-07, RS-09, RS-10|Decisiones del modelo|Cada decisión sensible cita el RS|
-|Capítulo 4|Migraciones|Las 6 migraciones son la primera entrega del Capítulo 4|
+|Capítulo 4|Migraciones e implementación de repositorios|Las migraciones del esquema y los repositorios ORM son la primera entrega del Capítulo 4|
 
 </div>

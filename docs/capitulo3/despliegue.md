@@ -2,21 +2,21 @@
 
 ## Propósito
 
-El diagrama de despliegue compromete las decisiones lógicas de los apartados anteriores con la **infraestructura física** sobre la que el sistema correrá: nodos, contenedores, procesos, redes y volúmenes. Cierra el Capítulo 3 fijando un escenario reproducible que el Capítulo 4 podrá levantar con un único comando.
+El diagrama de despliegue compromete las decisiones lógicas de los apartados anteriores con un **modelo físico** de nodos, contenedores, redes y volúmenes que el Capítulo 4 podrá materializar. El objetivo de esta sección es fijar el **esqueleto de despliegue** —qué se ejecuta dónde, cómo se comunican los procesos y dónde se persiste el estado—, no producir los ficheros de orquestación.
 
 <div align=center>
 
-||||
+|||
 |-|-|
 |**Punto de partida**|Vista física preliminar del [Diseño de la arquitectura](disenoArquitectura.md), restricciones de RS-03 (24/7) y RS-08 (sustituibilidad)|
-|**Resultado**|Diagrama UML de despliegue, fichero `docker-compose.yml` conceptual, esquema de redes y volúmenes, política de health checks y reinicios|
-|**Restricción**|Self-hosting sobre la infraestructura de Infinite Fieldx; un único nodo físico; reproducible por cualquier desarrollador con `docker compose up`|
+|**Resultado**|Diagrama UML de despliegue, asignación de subsistemas a contenedores, esquema de redes y volúmenes, política de salud y reinicios|
+|**Restricción**|Self-hosting sobre la infraestructura de Infinite Fieldx; un único nodo físico; la operación de despliegue debe ser reproducible *(los ficheros concretos de orquestación se entregan en el Capítulo 4)*|
 
 </div>
 
 ## Vista de despliegue
 
-El sistema se despliega como **cuatro contenedores** sobre un único nodo Docker, compartiendo dos redes virtuales y tres volúmenes persistentes.
+El sistema se despliega como **cuatro contenedores** sobre un único nodo, comunicándose a través de dos redes virtuales y persistiendo en tres volúmenes.
 
 <div align=center>
 
@@ -28,12 +28,12 @@ El sistema se despliega como **cuatro contenedores** sobre un único nodo Docker
 
 <div align=center>
 
-|Contenedor|Imagen base|Función|Subsistemas alojados|
+|Contenedor|Tecnología base|Función|Subsistemas alojados|
 |-|-|-|-|
-|`backend`|`node:20-alpine` *(custom build)*|Servidor NestJS: REST + WS + handlers de eventos|S-PRES (HTTP+WS), S-INGE, S-LEAD, S-CATA, S-ALER, S-EVAL, S-NOTI|
-|`frontend`|`nginx:alpine` *(custom build)*|Servidor estático que sirve el bundle React + reverse proxy hacia `backend`|*(parte de S-PRES)*|
-|`postgres`|`postgres:16-alpine`|RDBMS: catálogo, alertas, notificaciones|*(persistencia de S-CATA, S-ALER, S-NOTI)*|
-|`redis`|`redis:7-alpine`|Estado caliente: leaderboard + cola de reintentos|*(estado de S-LEAD, S-NOTI)*|
+|`backend`|Runtime Node.js + framework NestJS|Servidor REST + WebSocket + handlers de eventos del bus|S-PRES (HTTP+WS), S-INGE, S-LEAD, S-CATA, S-ALER, S-EVAL, S-NOTI|
+|`frontend`|Servidor estático (reverse proxy)|Sirve el bundle SPA y termina TLS, enrutando `/api/*` al `backend`|*(parte de S-PRES)*|
+|`postgres`|RDBMS PostgreSQL|Persistencia de catálogo, alertas y notificaciones|*(persistencia de S-CATA, S-ALER, S-NOTI)*|
+|`redis`|Almacén clave-valor en memoria con AOF|Estado caliente: leaderboard + cola de reintentos|*(estado de S-LEAD, S-NOTI)*|
 
 </div>
 
@@ -41,142 +41,41 @@ El sistema se despliega como **cuatro contenedores** sobre un único nodo Docker
 
 <div align=center>
 
-|Origen|Destino|Protocolo|Puerto|Naturaleza|
-|-|-|-|-|-|
-|Usuario *(navegador)*|`frontend`|HTTPS|443|Servir bundle estático (React build)|
-|Usuario *(navegador)*|`backend` *(vía proxy nginx)*|HTTPS|443|REST API + WebSocket upgrade|
-|`backend`|`postgres`|TCP/SQL|5432|Consultas y mutaciones; pool de conexiones TypeORM|
-|`backend`|`redis`|TCP/RESP|6379|ZINCRBY, ZRANGE, LPUSH, BRPOP|
-|`backend`|Hyperliquid L1|WebSocket *(saliente)*|Internet|Suscripción a feeds (operaciones, precios)|
-|`backend`|Servicio Webhook (n8n)|HTTPS *(saliente)*|Internet|POST de notificaciones (RS-10)|
+|Origen|Destino|Protocolo|Naturaleza|
+|-|-|-|-|
+|Usuario *(navegador)*|`frontend`|HTTPS|Servir bundle estático|
+|Usuario *(navegador)*|`backend` *(vía proxy)*|HTTPS *(REST + WS upgrade)*|REST API + WebSocket reactivo (CU-01)|
+|`backend`|`postgres`|TCP/SQL|Consultas y mutaciones (CU-02..CU-12, CU-14)|
+|`backend`|`redis`|TCP/RESP|Operaciones sobre Sorted Set (CU-01) y List (RS-07)|
+|`backend`|Hyperliquid L1|WebSocket *(saliente)*|Suscripción a feeds de operaciones y precios|
+|`backend`|Servicio Webhook|HTTPS POST *(saliente)*|Transmisión de notificaciones (CU-14)|
 
 </div>
 
-> El `frontend` y el `backend` se publican tras un único punto de entrada (nginx en `frontend`) que termina TLS y enruta `/api/*` al `backend`. El usuario solo ve un puerto.
+> Solo el contenedor `frontend` se expone al exterior; `postgres` y `redis` quedan en una red interna y no son accesibles desde el host. El usuario percibe un único punto de entrada que termina TLS y enruta hacia los servicios internos.
 
-## Redes Docker
+## Redes y volúmenes
 
 <div align=center>
 
-|Red|Tipo|Conecta|Razón|
-|-|-|-|-|
-|`fieldx-edge`|`bridge`|`frontend` ↔ exterior|Red expuesta al host. Solo la usa el contenedor que termina TLS|
-|`fieldx-internal`|`bridge`|`backend` ↔ `postgres` ↔ `redis` ↔ `frontend`|Red privada para tráfico interno. PostgreSQL y Redis **no se exponen al host**|
+|Red|Conecta|Razón|
+|-|-|-|
+|*Red de borde*|`frontend` ↔ exterior|Red expuesta al host. Solo la usa el contenedor que termina TLS|
+|*Red interna*|`backend` ↔ `postgres` ↔ `redis` ↔ `frontend`|Red privada para tráfico interno. La persistencia y la caché no se exponen al host|
 
 </div>
-
-> La separación impide que `postgres` o `redis` queden accesibles desde el exterior. El único puerto expuesto al host es 443 (frontend).
-
-## Volúmenes persistentes
 
 <div align=center>
 
-|Volumen|Montado en|Persistencia|Backup|
+|Volumen|Contenedor|Función|RS|
 |-|-|-|-|
-|`fieldx-postgres-data`|`/var/lib/postgresql/data`|RS-03 (24/7) — datos del catálogo, alertas y notificaciones|`pg_dump` programado|
-|`fieldx-redis-data`|`/data`|AOF habilitado — supervivencia del leaderboard y la cola de reintentos|*(no crítico — reconstruible)*|
-|`fieldx-backend-logs`|`/var/log/backend`|Logs estructurados rotados|*(no crítico)*|
+|`fieldx-postgres-data`|`postgres`|Persistencia ACID del catálogo, las alertas y las notificaciones|RS-03, RS-09|
+|`fieldx-redis-data`|`redis`|Persistencia AOF del Sorted Set del leaderboard y de la cola de reintentos|RS-03, RS-07|
+|`fieldx-backend-logs`|`backend`|Logs estructurados rotados|RS-03|
 
 </div>
 
-## Composición Docker Compose
-
-```yaml
-version: '3.9'
-
-services:
-  frontend:
-    build: ./frontend
-    image: fieldx/frontend:latest
-    container_name: fieldx-frontend
-    ports:
-      - "443:443"
-    networks:
-      - fieldx-edge
-      - fieldx-internal
-    depends_on:
-      backend:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD","wget","-qO-","http://localhost/healthz"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-
-  backend:
-    build: ./backend
-    image: fieldx/backend:latest
-    container_name: fieldx-backend
-    environment:
-      NODE_ENV: production
-      DATABASE_URL: postgres://fieldx:${POSTGRES_PASSWORD}@postgres:5432/fieldx
-      REDIS_URL: redis://redis:6379
-      HYPERLIQUID_WS_URL: ${HYPERLIQUID_WS_URL}
-      APP_SECRET: ${APP_SECRET}
-    networks:
-      - fieldx-internal
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - fieldx-backend-logs:/var/log/backend
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD","node","-e","require('http').get('http://localhost:3000/health',r=>process.exit(r.statusCode===200?0:1))"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-
-  postgres:
-    image: postgres:16-alpine
-    container_name: fieldx-postgres
-    environment:
-      POSTGRES_DB: fieldx
-      POSTGRES_USER: fieldx
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    networks:
-      - fieldx-internal
-    volumes:
-      - fieldx-postgres-data:/var/lib/postgresql/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL","pg_isready -U fieldx"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    container_name: fieldx-redis
-    command: ["redis-server","--appendonly","yes"]
-    networks:
-      - fieldx-internal
-    volumes:
-      - fieldx-redis-data:/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD","redis-cli","ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-networks:
-  fieldx-edge:
-    driver: bridge
-  fieldx-internal:
-    driver: bridge
-    internal: false  # backend necesita salir a Hyperliquid y al webhook
-
-volumes:
-  fieldx-postgres-data:
-  fieldx-redis-data:
-  fieldx-backend-logs:
-```
-
-> El fichero anterior es la **versión conceptual**. La versión final (Capítulo 4) incorporará detalles operativos (políticas de log driver, límites de recursos, init system).
+> La separación en dos redes y la externalización del estado a volúmenes son las dos decisiones que materializan el RS-03 (24/7): tras un reinicio del host, los contenedores recuperan su estado y la disponibilidad del sistema no depende del proceso `backend` para los datos persistentes.
 
 ## Política de salud y reinicios
 
@@ -184,60 +83,42 @@ volumes:
 
 |Aspecto|Decisión|RS|
 |-|-|-|
-|`restart: unless-stopped`|Tras crash o reboot del host, el contenedor vuelve a arrancar automáticamente|RS-03|
-|Health checks Docker|Cada servicio expone una sonda. `depends_on: condition: service_healthy` impide que `backend` arranque antes de `postgres` y `redis`|RS-03|
-|Endpoint `/health` del backend|Implementado con `@nestjs/terminus`. Verifica conectividad con Postgres, Redis y la última recepción WS de Hyperliquid|RS-03, RS-08|
-|Reconexión automática del WS de Hyperliquid|`HyperliquidConnector` reintenta con backoff exponencial; si la conexión cae más de 60 s, marca `/health` como degraded para alertar|RS-03, RS-08|
+|**Auto-reinicio**|Cada contenedor se relanza tras crash o reboot del host hasta intervención explícita del operador|RS-03|
+|**Sondas de salud**|Cada servicio expone una sonda que el orquestador consulta periódicamente. El `backend` no arranca antes de que `postgres` y `redis` estén `healthy`|RS-03|
+|**Endpoint de salud del `backend`**|Verifica conectividad con `postgres`, con `redis` y la última recepción del WS de Hyperliquid; pasa a *degraded* si Hyperliquid lleva más de un umbral configurado sin emitir|RS-03, RS-08|
+|**Reconexión a Hyperliquid**|`HyperliquidConnector` reintenta con backoff exponencial; el resto del sistema continúa con el último estado conocido|RS-03, RS-08|
 
 </div>
 
-## Variables de entorno
+## Configuración externa
 
-Todas las variables sensibles se inyectan desde un fichero `.env` que **no se versiona** (`.env.example` sí, sin secretos).
+Todas las decisiones que pueden cambiar entre entornos (local, staging, Infinite Fieldx) se exponen como **variables de configuración externas al contenedor**. El esqueleto del diseño solo fija qué variables existen y qué función cumplen; los valores concretos los aporta cada despliegue.
 
 <div align=center>
 
-|Variable|Tipo|Uso|
-|-|-|-|
-|`POSTGRES_PASSWORD`|secreto|Conexión `backend` → `postgres`|
-|`APP_SECRET`|secreto|Clave maestra para `pgp_sym_encrypt` (RS-10)|
-|`HYPERLIQUID_WS_URL`|configuración|Endpoint del feed de Hyperliquid (sustituible por nodo no validador, RS-08)|
-|`LOG_LEVEL`|configuración|`info` por defecto, `debug` en desarrollo|
+|Variable|Naturaleza|Función|RS|
+|-|-|-|-|
+|`POSTGRES_PASSWORD`|Secreto|Conexión `backend` ↔ `postgres`|RS-10|
+|`APP_SECRET`|Secreto|Clave maestra para el cifrado simétrico de URLs de webhook (cf. [Modelo de datos](modeloDeDatos.md))|RS-10|
+|`HYPERLIQUID_WS_URL`|Configuración|Endpoint del feed de Hyperliquid — punto de sustituibilidad RS-08|RS-08|
+|`LOG_LEVEL`|Configuración|Verbosidad del logger|—|
 
 </div>
 
 ## Sustituibilidad de la frontera (RS-08)
 
-La sustitución del proveedor de Hyperliquid (API pública ↔ nodo no validador) se realiza **sin tocar código**, cambiando dos elementos:
+La sustitución del proveedor de Hyperliquid (API pública ↔ nodo no validador) se realiza **sin modificar el código del núcleo**:
 
 <div align=center>
 
-|Cambio|Mecanismo|
+|Elemento que cambia|Mecanismo|
 |-|-|
-|`HYPERLIQUID_WS_URL`|Variable de entorno: apunta al nuevo endpoint|
-|*(opcional)* implementación de `IHyperliquidPort`|Si el protocolo del nodo no validador difiere, se proporciona una segunda implementación en `infrastructure/connectors/hyperliquid/` y se cambia el provider en `IngestionModule`|
+|Endpoint del feed|Variable de configuración (`HYPERLIQUID_WS_URL`)|
+|Protocolo del feed *(si difiere)*|Una segunda implementación de `IHyperliquidPort` se inyecta en `IngestionModule`. La capa de aplicación y el dominio no cambian|
 
 </div>
 
-> El núcleo del sistema no cambia: el adapter es el único que conoce el protocolo concreto.
-
-## Despliegue inicial
-
-<div align=center>
-
-|Paso|Comando|
-|-|-|
-|1|Clonar el repositorio|
-|2|`cp .env.example .env` y rellenar valores|
-|3|`docker compose build`|
-|4|`docker compose run --rm backend npm run migration:run` *(crea esquema Postgres)*|
-|5|`docker compose up -d`|
-|6|*(si HTTPS)* desplegar certificado en `frontend`|
-|7|Comprobar `https://<host>/health`|
-
-</div>
-
-> En aproximadamente 7 pasos el sistema queda corriendo. Esto materializa la promesa de "self-hosting reproducible" del Capítulo 1.
+> El núcleo del sistema permanece intacto: el adaptador es el único componente que conoce el protocolo concreto. Esta es la materialización física del puerto identificado en el [Diseño de la arquitectura](disenoArquitectura.md).
 
 ## Validación del despliegue
 
@@ -245,11 +126,11 @@ La sustitución del proveedor de Hyperliquid (API pública ↔ nodo no validador
 
 |Criterio|Comprobación|
 |-|-|
-|**Disponibilidad 24/7 (RS-03)**|`restart: unless-stopped` + health checks + datos persistentes en volumen|
-|**Sustituibilidad (RS-08)**|El proveedor Hyperliquid es una variable de entorno + interfaz de adapter|
-|**Confidencialidad (RS-10)**|Webhook cifrado en BD; `APP_SECRET` solo en `.env` y entorno del contenedor|
-|**Reproducibilidad**|`docker compose up` desde un repo limpio produce un sistema funcional sin pasos manuales|
-|**Escalabilidad limitada al alcance**|Un único nodo. La descomposición lógica en módulos NestJS deja preparada una eventual descomposición en microservicios cuando RS lo exija|
+|**Disponibilidad 24/7 (RS-03)**|Auto-reinicio + sondas de salud + estado persistente en volúmenes|
+|**Sustituibilidad (RS-08)**|El proveedor Hyperliquid es una variable de configuración + un punto de inyección de adapter|
+|**Confidencialidad (RS-10)**|Webhook cifrado en BD; secretos solo en el entorno del contenedor, nunca en el repositorio|
+|**Reproducibilidad**|Un único nodo, contenedores estándar y configuración externalizada permiten levantar el sistema con un único comando de orquestación|
+|**Escalabilidad limitada al alcance**|Un único nodo es suficiente para la fase de Elaboración. La descomposición lógica en módulos NestJS deja preparada una eventual descomposición en microservicios cuando algún RS lo exija|
 
 </div>
 
@@ -260,8 +141,8 @@ La sustitución del proveedor de Hyperliquid (API pública ↔ nodo no validador
 |De|A|Mecanismo|
 |-|-|-|
 |[Diseño de la arquitectura](disenoArquitectura.md)|Esta especificación|Cada subsistema lógico se mapea a un proceso/contenedor|
-|[Modelo de datos](modeloDeDatos.md)|Volúmenes Postgres y Redis|Persistencia de las tablas y estructuras descritas|
-|RS-03, RS-08, RS-10|Health checks, variables, cifrado|Cada decisión cita el RS|
-|Capítulo 4|`Dockerfile`, `docker-compose.yml`, scripts de despliegue|La versión final del compose file es la primera entrega operativa del Capítulo 4|
+|[Modelo de datos](modeloDeDatos.md)|Volúmenes `postgres` y `redis`|Persistencia de las tablas y estructuras descritas|
+|RS-03, RS-08, RS-10|Auto-reinicio, sondas, configuración externalizada, cifrado|Cada decisión cita el RS|
+|Capítulo 4|Ficheros de orquestación (`Dockerfile`, `docker-compose.yml`), scripts y procedimientos de despliegue|La implementación concreta del despliegue —el qué, el cómo y el cuándo de cada comando— se entrega en el Capítulo 4|
 
 </div>

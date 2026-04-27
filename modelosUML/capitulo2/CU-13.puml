@@ -1,0 +1,31 @@
+@startuml CU-13
+
+title CU-13 — Evaluar alertas activas
+
+start
+
+:Hyperliquid L1 entrega una
+actualización de precio para un token;
+
+:El sistema recupera las alertas
+operativas para ese token;
+
+if (¿Hay alertas operativas?) then (sí)
+  while (¿Queda alguna alerta por evaluar?) is (sí)
+    :El sistema compara el nuevo precio
+    con el umbral de la alerta;
+    if (¿Se cumple la condición?) then (sí)
+      :El sistema marca la alerta
+      como disparada;
+      :El sistema solicita CU-14
+      Enviar notificación
+      (<<include>>);
+    else (no)
+    endif
+  endwhile (no)
+else (no)
+endif
+
+stop
+
+@enduml

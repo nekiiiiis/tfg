@@ -6,25 +6,43 @@ actor "Usuario" as U
 actor "Hyperliquid L1" as HL
 actor "Servicio Webhook" as SW
 
-package "Sistema" {
-  usecase "Consultar leaderboard" as CU01
-  usecase "Crear entidad" as CU02
-  usecase "Gestionar entidades" as CU03
-  usecase "Configurar alerta" as CU04
-  usecase "Gestionar alertas" as CU05
-  usecase "Evaluar alertas" as CU06
-  usecase "Enviar notificacion" as CU07
+rectangle "Sistema" {
+  usecase "CU-01\nConsultar\nleaderboard" as UC01
+
+  usecase "CU-02\nCrear entidad"    as UC02
+  usecase "CU-03\nAbrir entidades"  as UC03
+  usecase "CU-04\nEditar entidad"   as UC04
+  usecase "CU-05\nEliminar entidad" as UC05
+
+  usecase "CU-06\nAñadir dirección"   as UC06
+  usecase "CU-07\nAbrir direcciones"  as UC07
+  usecase "CU-08\nEliminar dirección" as UC08
+
+  usecase "CU-09\nCrear\nalerta de precio"    as UC09
+  usecase "CU-10\nAbrir\nalertas de precio"   as UC10
+  usecase "CU-11\nEditar\nalerta de precio"   as UC11
+  usecase "CU-12\nEliminar\nalerta de precio" as UC12
+
+  usecase "CU-13\nEvaluar\nalertas activas" as UC13
+  usecase "CU-14\nEnviar\nnotificación"     as UC14
 }
 
-U --> CU01
-U --> CU02
-U --> CU03
-U --> CU04
-U --> CU05
+U --> UC01
+U --> UC02
+U --> UC03
+U --> UC04
+U --> UC05
+U --> UC06
+U --> UC07
+U --> UC08
+U --> UC09
+U --> UC10
+U --> UC11
+U --> UC12
 
-HL --> CU01
-HL --> CU06
+HL --> UC01
+HL --> UC13
 
-CU07 --> SW
+UC14 --> SW
 
 @enduml

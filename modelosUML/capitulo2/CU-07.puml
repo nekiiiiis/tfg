@@ -1,0 +1,24 @@
+@startuml CU-07
+
+title CU-07 — Abrir direcciones
+
+start
+:El Usuario solicita abrir las
+direcciones de una entidad;
+:El sistema presenta las direcciones
+asociadas a la entidad;
+
+repeat
+  if (¿El Usuario solicita filtrar?) then (sí)
+    :El Usuario introduce criterio;
+    :El sistema presenta la relación filtrada;
+  else (no)
+  endif
+repeat while (¿El Usuario quiere ajustar el filtro?) is (sí)
+->no;
+
+:El Usuario solicita una operación
+sobre una dirección;
+stop
+
+@enduml

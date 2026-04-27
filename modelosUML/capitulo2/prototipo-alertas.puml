@@ -1,22 +1,16 @@
 @startsalt
 {+
-  {/ Leaderboard | Entidades | <b>Alertas }
+  <b>Alertas de precio
+  ---
+  Filtrar: | "                              "
   ---
   {#
-    <b>Token | <b>Mercado    | <b>Umbral ($) | <b>Webhook          | <b>Estado      | <b>Acciones
-    BTC   | Perps nativos | 100 000    | https://discord...  | Activa        | [Desactivar] [Eliminar]
-    PURR  | Spot          | 0.50       | https://discord...  | Activa        | [Desactivar] [Eliminar]
-    FRIEND| Perps HIP-3   | 2.00       | https://slack...    | Desactivada   | [Activar] [Eliminar]
+    <b>Token | <b>Mercado     | <b>Umbral ($) | <b>Webhook          | <b>Estado     | <b>Acciones
+    BTC   | Perp nativo    | 100.000    | https://discord...  | Operativa    | [Abrir] [Eliminar]
+    PURR  | Spot           | 0,50       | https://discord...  | Operativa    | [Abrir] [Eliminar]
+    FRIEND| Perp HIP-3     | 2,00       | https://slack...    | Notif.fallida| [Abrir] [Eliminar]
   }
   ---
-  <b>Crear nueva alerta
-  {
-    Mercado:     | ^Spot ^ Perps nativos ^ Perps HIP-3^
-    Token:       | ^BTC^
-    Umbral ($):  | "          "
-    URL Webhook: | "                              "
-  }
-  ---
-  [Crear alerta]
+  [Crear alerta] | [Volver]
 }
 @endsalt

@@ -1,0 +1,25 @@
+@startuml CU-01
+
+title CU-01 — Consultar leaderboard
+
+actor "Usuario" as U
+participant "Sistema" as S
+participant "Hyperliquid L1" as HL
+
+U -> S : solicita consultar leaderboard
+S --> U : permite seleccionar\nmercado, token y temporalidad
+U -> S : selecciona mercado, token\ny temporalidad
+S -> HL : solicita flujo continuo\nde operaciones del token
+
+HL --> S : flujo de operaciones
+S -> S : agrega volúmenes\nde compra y venta por dirección
+S -> S : resuelve nombres\nde entidades conocidas
+S --> U : presenta la clasificación ordenada
+
+loop Mientras el Usuario permanezca en el contexto
+  HL --> S : nueva operación
+  S -> S : recalcula volúmenes
+  S --> U : actualiza la clasificación
+end
+
+@enduml

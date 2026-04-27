@@ -1,0 +1,31 @@
+@startuml CU-09
+
+title CU-09 — Crear alerta de precio
+
+start
+:El Usuario solicita crear una alerta;
+:El sistema permite seleccionar
+mercado y token;
+:El Usuario selecciona mercado y token;
+:El sistema permite introducir
+umbral y dirección del webhook;
+:El Usuario introduce umbral y webhook;
+
+if (¿Umbral con formato válido?) then (sí)
+  if (¿Webhook alcanzable?) then (sí)
+    :El sistema registra la alerta
+    en estado operativo;
+    :El sistema presenta confirmación;
+    stop
+  else (no)
+    :El sistema informa y permite corregir
+    o confirmar pese al aviso;
+    stop
+  endif
+else (no)
+  :El sistema informa del error
+  y permite corregir;
+  stop
+endif
+
+@enduml

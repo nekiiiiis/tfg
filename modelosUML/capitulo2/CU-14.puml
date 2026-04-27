@@ -1,0 +1,25 @@
+@startuml CU-14
+
+title CU-14 — Enviar notificación
+
+participant "Sistema" as S
+participant "Servicio Webhook" as SW
+
+S -> S : compone la notificación\n(token, precio actual, umbral)
+S -> SW : transmite la notificación
+
+alt Recepción confirmada
+  SW --> S : confirmación
+  S -> S : registra la notificación\ncomo entregada
+  S -> S : rearma la alerta\nal estado operativo
+else Error o ausencia de respuesta
+  SW --> S : error / sin respuesta
+  S -> S : marca la notificación\ncomo fallida
+  S -> S : programa reintento
+  note right of S
+    Se aplica el CdU de
+    reintentoNotificación (<<extend>>)
+  end note
+end
+
+@enduml

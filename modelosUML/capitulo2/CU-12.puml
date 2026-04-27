@@ -1,0 +1,18 @@
+@startuml CU-12
+
+title CU-12 — Eliminar alerta de precio
+
+start
+:El Usuario solicita eliminar una alerta;
+:El sistema solicita confirmación;
+if (¿El Usuario confirma?) then (sí)
+  :El sistema da de baja la alerta;
+  :El sistema presenta confirmación;
+  stop
+else (no)
+  :El sistema cancela la operación
+  sin cambios;
+  stop
+endif
+
+@enduml

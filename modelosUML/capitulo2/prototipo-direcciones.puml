@@ -1,0 +1,18 @@
+@startsalt
+{+
+  <b>Direcciones de la entidad: Wintermute
+  ---
+  Filtrar: | "                              "
+  ---
+  {#
+    <b>Dirección       | <b>Acciones
+    0xabc1...f3      | [Eliminar]
+    0xdef2...a7      | [Eliminar]
+    0x9ef4...b2      | [Eliminar]
+  }
+  ---
+  Nueva dirección: | "                                              " | [Añadir]
+  ---
+  [Volver]
+}
+@endsalt

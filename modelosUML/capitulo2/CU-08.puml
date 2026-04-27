@@ -1,0 +1,19 @@
+@startuml CU-08
+
+title CU-08 — Eliminar dirección
+
+start
+:El Usuario solicita eliminar una dirección;
+:El sistema solicita confirmación;
+if (¿El Usuario confirma?) then (sí)
+  :El sistema rompe el vínculo
+  entre dirección y entidad;
+  :El sistema presenta confirmación;
+  stop
+else (no)
+  :El sistema cancela la operación
+  sin cambios;
+  stop
+endif
+
+@enduml

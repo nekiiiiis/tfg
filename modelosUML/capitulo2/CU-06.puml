@@ -1,0 +1,27 @@
+@startuml CU-06
+
+title CU-06 — Añadir dirección
+
+start
+:El Usuario solicita añadir una dirección
+a la entidad;
+:El sistema permite introducir la dirección;
+:El Usuario introduce la dirección;
+
+if (¿Formato válido?) then (sí)
+  if (¿La dirección ya está asociada
+  a alguna entidad?) then (no)
+    :El sistema registra la asociación;
+    :El sistema presenta confirmación;
+    stop
+  else (sí)
+    :El sistema informa del conflicto
+    de asociación;
+    stop
+  endif
+else (no)
+  :El sistema informa del error de formato;
+  stop
+endif
+
+@enduml

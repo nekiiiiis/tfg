@@ -1,20 +1,22 @@
 @startsalt
 {+
-  {/ <b>Leaderboard | Entidades | Alertas }
+  <b>Leaderboard
   ---
   {
-    Mercado: | ^Spot ^ Perps nativos ^ Perps HIP-3^
-    Token:   | ^PURR^
-    Temporalidad: | ^1h ^ 4h ^ 6h ^ 12h ^ 1d ^ 1w^
+    Mercado:      | ^Spot^ ^Perp nativo^ ^Perp HIP-3^
+    Token:        | ^PURR^
+    Temporalidad: | ^1h^ ^4h^ ^6h^ ^12h^ ^1d^ ^1w^
   }
   ---
   {#
-    <b>Pos | <b>Direccion / Entidad      | <b>Vol. compra ($) | <b>Vol. venta ($)
-    1   | Wintermute                 | 1 200 000          | 340 000
-    2   | 0xabc1...f3                | 890 000            | 120 000
-    3   | 0x9ef4...b2                | 540 000            | 780 000
-    4   | 0xdef2...a7                | 310 000            | 420 000
-    5   | 0x7bc3...e1                | 210 000            | 150 000
+    <b>Pos | <b>Dirección / Entidad | <b>Vol. compra ($) | <b>Vol. venta ($)
+    1    | Wintermute             | 1.200.000          | 340.000
+    2    | 0xabc1...f3            | 890.000            | 120.000
+    3    | 0x9ef4...b2            | 540.000            | 780.000
+    4    | 0xdef2...a7            | 310.000            | 420.000
+    5    | 0x7bc3...e1            | 210.000            | 150.000
   }
+  ---
+  [Volver]
 }
 @endsalt

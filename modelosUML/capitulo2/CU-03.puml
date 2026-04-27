@@ -1,0 +1,23 @@
+@startuml CU-03
+
+title CU-03 — Abrir entidades
+
+start
+:El Usuario solicita abrir entidades;
+:El sistema presenta la relación
+de entidades registradas;
+
+repeat
+  if (¿El Usuario solicita filtrar?) then (sí)
+    :El Usuario introduce criterio;
+    :El sistema presenta la relación filtrada;
+  else (no)
+  endif
+repeat while (¿El Usuario quiere ajustar el filtro?) is (sí)
+->no;
+
+:El Usuario solicita una operación
+sobre una entidad;
+stop
+
+@enduml

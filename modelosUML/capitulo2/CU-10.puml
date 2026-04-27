@@ -1,0 +1,23 @@
+@startuml CU-10
+
+title CU-10 — Abrir alertas de precio
+
+start
+:El Usuario solicita abrir alertas;
+:El sistema presenta la relación
+de alertas registradas con su estado;
+
+repeat
+  if (¿El Usuario solicita filtrar?) then (sí)
+    :El Usuario introduce criterio;
+    :El sistema presenta la relación filtrada;
+  else (no)
+  endif
+repeat while (¿El Usuario quiere ajustar el filtro?) is (sí)
+->no;
+
+:El Usuario solicita una operación
+sobre una alerta;
+stop
+
+@enduml

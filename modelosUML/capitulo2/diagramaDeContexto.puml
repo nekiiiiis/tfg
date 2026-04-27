@@ -1,17 +1,41 @@
 @startuml
 
-left to right direction
+skinparam linetype polyline
 
-actor "Usuario" as U
-actor "Hyperliquid L1" as HL
-actor "Servicio Webhook" as SW
+[*] --> SISTEMA_DISPONIBLE
 
-package "Sistema" {
-  usecase "Consultar leaderboard\nGestionar entidades\nConfigurar alertas" as SIS
-}
+state SISTEMA_DISPONIBLE
+state LEADERBOARD_ABIERTO
+state ENTIDADES_ABIERTAS
+state ENTIDAD_ABIERTA
+state DIRECCIONES_ABIERTAS
+state ALERTAS_ABIERTAS
+state ALERTA_ABIERTA
 
-U --> SIS
-HL --> SIS : Precios y operaciones\nvia API/WebSocket
-SIS --> SW : Notificaciones\nde alertas
+' --- Leaderboard ---
+SISTEMA_DISPONIBLE --> LEADERBOARD_ABIERTO : CU-01 Consultar leaderboard
+
+' --- Entidades ---
+SISTEMA_DISPONIBLE --> ENTIDADES_ABIERTAS : CU-03 Abrir entidades
+ENTIDADES_ABIERTAS --> ENTIDAD_ABIERTA : CU-02 Crear entidad
+ENTIDADES_ABIERTAS --> ENTIDAD_ABIERTA : CU-04 Editar entidad
+ENTIDADES_ABIERTAS --> ENTIDADES_ABIERTAS : CU-05 Eliminar entidad
+
+' --- Direcciones (sub-contexto de una entidad) ---
+ENTIDAD_ABIERTA --> DIRECCIONES_ABIERTAS : CU-07 Abrir direcciones
+DIRECCIONES_ABIERTAS --> DIRECCIONES_ABIERTAS : CU-06 Añadir dirección
+DIRECCIONES_ABIERTAS --> DIRECCIONES_ABIERTAS : CU-08 Eliminar dirección
+
+' --- Alertas ---
+SISTEMA_DISPONIBLE --> ALERTAS_ABIERTAS : CU-10 Abrir alertas de precio
+ALERTAS_ABIERTAS --> ALERTA_ABIERTA : CU-09 Crear alerta de precio
+ALERTAS_ABIERTAS --> ALERTA_ABIERTA : CU-11 Editar alerta de precio
+ALERTAS_ABIERTAS --> ALERTAS_ABIERTAS : CU-12 Eliminar alerta de precio
+
+note right of SISTEMA_DISPONIBLE
+  Hub central de navegación.
+  Punto de acceso a las tres
+  áreas funcionales.
+end note
 
 @enduml

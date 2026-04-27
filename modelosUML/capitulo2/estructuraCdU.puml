@@ -6,35 +6,48 @@ actor "Usuario" as U
 actor "Hyperliquid L1" as HL
 actor "Servicio Webhook" as SW
 
-package "Sistema" {
-  package "Leaderboard" {
-    usecase "Consultar leaderboard" as CU01
-  }
+rectangle "Sistema" {
+  usecase "CU-01\nConsultar leaderboard" as UC01
 
-  package "Entidades" {
-    usecase "Crear entidad" as CU02
-    usecase "Gestionar entidades" as CU03
-  }
+  usecase "CU-02\nCrear entidad"    as UC02
+  usecase "CU-03\nAbrir entidades"  as UC03
+  usecase "CU-04\nEditar entidad"   as UC04
+  usecase "CU-05\nEliminar entidad" as UC05
 
-  package "Alertas" {
-    usecase "Configurar alerta" as CU04
-    usecase "Gestionar alertas" as CU05
-    usecase "Evaluar alertas" as CU06
-    usecase "Enviar notificacion" as CU07
-  }
+  usecase "CU-06\nAñadir dirección"   as UC06
+  usecase "CU-07\nAbrir direcciones"  as UC07
+  usecase "CU-08\nEliminar dirección" as UC08
+
+  usecase "CU-09\nCrear alerta de precio"    as UC09
+  usecase "CU-10\nAbrir alertas de precio"   as UC10
+  usecase "CU-11\nEditar alerta de precio"   as UC11
+  usecase "CU-12\nEliminar alerta de precio" as UC12
+
+  usecase "CU-13\nEvaluar alertas activas" as UC13
+  usecase "CU-14\nEnviar notificación"     as UC14
+  usecase "reintentoNotificación"          as UCRN
 }
 
-U --> CU01
-U --> CU02
-U --> CU03
-U --> CU04
-U --> CU05
+U --> UC01
+U --> UC02
+U --> UC03
+U --> UC09
+U --> UC10
 
-HL --> CU01
-HL --> CU06
+HL --> UC01
+HL --> UC13
 
-CU07 --> SW
+UC14 --> SW
 
-CU06 ..> CU07 : <<include>>
+UC04 ..> UC03 : <<include>>
+UC05 ..> UC03 : <<include>>
+UC06 ..> UC03 : <<include>>
+UC07 ..> UC03 : <<include>>
+UC08 ..> UC07 : <<include>>
+UC11 ..> UC10 : <<include>>
+UC12 ..> UC10 : <<include>>
+UC13 ..> UC14 : <<include>>
+
+UCRN ..> UC14 : <<extend>>\n(si el webhook\nno confirma)
 
 @enduml

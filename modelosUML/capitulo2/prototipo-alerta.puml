@@ -1,0 +1,14 @@
+@startsalt
+{+
+  <b>Alerta de precio
+  ---
+  {
+    Mercado:      | ^Spot^ ^Perp nativo^ ^Perp HIP-3^
+    Token:        | ^BTC^
+    Umbral ($):   | "100000                    "
+    URL Webhook:  | "https://...                                "
+  }
+  ---
+  [Guardar] | [Volver]
+}
+@endsalt

@@ -1,0 +1,19 @@
+@startuml CU-02
+
+title CU-02 — Crear entidad
+
+start
+:El Usuario solicita crear una entidad;
+:El sistema permite introducir el nombre;
+:El Usuario introduce el nombre;
+if (¿Nombre válido y no duplicado?) then (sí)
+  :El sistema registra la entidad;
+  :El sistema presenta confirmación;
+  stop
+else (no)
+  :El sistema informa del motivo
+  (nombre vacío o en uso);
+  stop
+endif
+
+@enduml

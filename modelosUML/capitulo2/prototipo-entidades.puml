@@ -1,19 +1,16 @@
 @startsalt
 {+
-  {/ Leaderboard | <b>Entidades | Alertas }
+  <b>Entidades
+  ---
+  Filtrar: | "                              "
   ---
   {#
-    <b>Nombre      | <b>Direcciones                   | <b>Acciones
-    Wintermute  | 0xabc1...f3, 0xdef2...a7        | [Editar] [Eliminar]
-    JumpTrading | 0x9ef4...b2                     | [Editar] [Eliminar]
+    <b>Nombre        | <b>N.º direcciones | <b>Acciones
+    Wintermute     | 12                 | [Abrir] [Eliminar]
+    Jump Trading   | 7                  | [Abrir] [Eliminar]
+    Cumberland     | 4                  | [Abrir] [Eliminar]
   }
   ---
-  <b>Crear nueva entidad
-  {
-    Nombre:    | "                    "
-    Direccion: | "                              " | [Anadir]
-  }
-  ---
-  [Guardar entidad]
+  [Crear entidad] | [Volver]
 }
 @endsalt

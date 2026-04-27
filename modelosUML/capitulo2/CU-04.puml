@@ -1,0 +1,19 @@
+@startuml CU-04
+
+title CU-04 — Editar entidad
+
+start
+:El Usuario solicita editar una entidad;
+:El sistema presenta el nombre actual
+y permite introducir uno nuevo;
+:El Usuario introduce el nuevo nombre;
+if (¿Nombre válido y no duplicado?) then (sí)
+  :El sistema registra el nuevo nombre;
+  :El sistema presenta confirmación;
+  stop
+else (no)
+  :El sistema informa del motivo;
+  stop
+endif
+
+@enduml

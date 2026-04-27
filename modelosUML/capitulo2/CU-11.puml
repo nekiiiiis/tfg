@@ -1,0 +1,21 @@
+@startuml CU-11
+
+title CU-11 — Editar alerta de precio
+
+start
+:El Usuario solicita editar una alerta;
+:El sistema presenta los parámetros
+actuales y permite modificarlos;
+:El Usuario introduce los nuevos parámetros;
+
+if (¿Parámetros válidos?) then (sí)
+  :El sistema registra los cambios;
+  :El sistema presenta confirmación;
+  stop
+else (no)
+  :El sistema informa del motivo
+  y permite corregir;
+  stop
+endif
+
+@enduml

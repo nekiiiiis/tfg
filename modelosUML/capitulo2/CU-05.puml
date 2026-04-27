@@ -1,0 +1,20 @@
+@startuml CU-05
+
+title CU-05 — Eliminar entidad
+
+start
+:El Usuario solicita eliminar una entidad;
+:El sistema solicita confirmación
+de la eliminación;
+if (¿El Usuario confirma?) then (sí)
+  :El sistema da de baja la entidad
+  y sus vínculos con direcciones;
+  :El sistema presenta confirmación;
+  stop
+else (no)
+  :El sistema cancela la operación
+  sin cambios;
+  stop
+endif
+
+@enduml

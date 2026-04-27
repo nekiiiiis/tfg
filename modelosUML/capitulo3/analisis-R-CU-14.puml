@@ -1,0 +1,32 @@
+@startuml
+
+actor "Servicio Webhook" as SW
+
+control "GestorEnvioNotificacion" as GEN
+boundary "ConectorWebhook" as CW
+entity "AlertaPrecio" as AP
+entity "Webhook" as W
+entity "Notificacion" as N
+
+GEN -> AP : leer(alerta)
+GEN -> W : leer(webhook)
+GEN -> N : crear(alerta, precio, webhook)
+GEN -> CW : transmitir(notificacion, webhook)
+CW -> SW : POST
+alt confirmación recibida
+    SW --> CW : 2xx
+    CW --> GEN : entregada
+    GEN -> N : marcar(ENTREGADA)
+    GEN -> AP : marcar(OPERATIVA)
+else error o sin respuesta
+    SW --> CW : error / timeout
+    CW --> GEN : fallo
+    GEN -> N : marcar(FALLIDA)
+    GEN -> AP : marcar(NOTIFICACION_FALLIDA)
+    GEN -> GEN : programar reintento
+    note right
+      <<extend>> reintentoNotificación
+    end note
+end
+
+@enduml

@@ -1,0 +1,29 @@
+@startuml
+
+actor Usuario as U
+actor "Hyperliquid L1" as HL
+
+boundary "VistaLeaderboard" as VL
+control "GestorConsultaLeaderboard" as GCL
+control "GestorCatalogoEntidades" as GCE
+boundary "ConectorHyperliquid" as CH
+entity "Operacion" as OP
+entity "Entidad" as EN
+
+U -> VL : solicita consultar (mercado, token, temporalidad)
+VL -> GCL : iniciarConsulta(mercado, token, temporalidad)
+GCL -> CH : suscribirOperaciones(token)
+CH -> HL : suscribir flujo
+... flujo continuo ...
+HL --> CH : operación
+CH -> CH : publicar evento\nOperacionRecibida
+CH --> GCL : OperacionRecibida(op)
+GCL -> OP : agregar(volumen, dirección)
+GCL -> GCE : resolverNombre(dirección)
+GCE -> EN : buscarPorDireccion(dirección)
+EN --> GCE : nombre / null
+GCE --> GCL : nombre / null
+GCL -> VL : actualizarClasificacion(filas)
+VL -> U : presenta clasificación
+
+@enduml

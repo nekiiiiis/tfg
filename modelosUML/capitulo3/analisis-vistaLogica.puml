@@ -1,0 +1,35 @@
+@startuml
+
+skinparam packageStyle rectangle
+hide stereotype
+left to right direction
+
+actor "Usuario" as U
+actor "Hyperliquid L1" as HL <<external>>
+actor "Servicio Webhook" as SW <<external>>
+
+package "Sistema" as S {
+    package "S-PRES\nPresentación" as PRES
+    package "S-INGE\nIngestión" as INGE
+    package "S-NOTI\nNotificación" as NOTI
+
+    package "S-LEAD\nLeaderboard" as LEAD
+    package "S-CATA\nCatálogo" as CATA
+    package "S-ALER\nAlertas" as ALER
+    package "S-EVAL\nEvaluación" as EVAL
+}
+
+U --> PRES
+HL --> INGE
+NOTI --> SW
+
+PRES ..> LEAD
+PRES ..> CATA
+PRES ..> ALER
+INGE ..> LEAD : <<event>>
+INGE ..> EVAL : <<event>>
+EVAL ..> ALER
+EVAL ..> NOTI
+LEAD ..> CATA
+
+@enduml

@@ -1,0 +1,56 @@
+@startuml
+
+skinparam linetype ortho
+hide stereotype
+
+class "ConectorHyperliquid" as CH <<boundary>> {
+    + suscribirPrecios(token)
+    + publicarPrecioActualizado(token, precio)
+}
+
+class "GestorEvaluacionAlertas" as GEA <<control>> {
+    + manejarPrecioActualizado(token, precio)
+    + evaluar(alerta, precio)
+}
+
+class "GestorAlertasPrecio" as GAP <<control>> {
+    + recuperarOperativasPara(token)
+    + marcarComoDisparada(alertaId)
+}
+
+class "GestorEnvioNotificacion" as GEN <<control>> {
+    - politicaReintento
+    + enviar(alerta, precio)
+    + manejarConfirmacion(notificacionId)
+    + manejarFallo(notificacionId)
+    + programarReintento(notificacionId)
+}
+
+class "ConectorWebhook" as CW <<boundary>> {
+    + transmitir(notificacion, webhook)
+}
+
+class "Precio" as P <<entity>> {
+    - valor
+    - instante
+}
+
+class "AlertaPrecio" as AP <<entity>>
+class "Token" as T <<entity>>
+class "Webhook" as W <<entity>>
+class "Notificacion" as N <<entity>> {
+    - instanteEmision
+    - estadoEntrega
+}
+
+CH ..> GEA : <<event>>\nPrecioActualizado
+GEA ..> GAP : recupera/actualiza
+GEA ..> GEN : <<include>>\nCU-13 → CU-14
+GEN ..> CW : transmite
+GEN --> N
+N --> AP
+N --> P
+N --> W
+P --> T
+
+@enduml

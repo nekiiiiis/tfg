@@ -1,0 +1,37 @@
+@startuml
+
+actor Usuario as U
+actor "Servicio Webhook" as SW
+
+boundary "VistaAlertas" as VA
+control "GestorAlertasPrecio" as GAP
+boundary "ConectorWebhook" as CW
+entity "AlertaPrecio" as AP
+entity "Token" as T
+entity "Webhook" as W
+
+U -> VA : solicita crear alerta
+VA -> U : permite seleccionar mercado, token
+U -> VA : selecciona mercado, token
+VA -> U : permite introducir umbral, webhook
+U -> VA : introduce umbral, webhook
+VA -> GAP : crearAlerta(token, umbral, webhook)
+GAP -> T : verificar(token)
+T --> GAP : ok
+GAP -> CW : comprobarAlcanzabilidad(webhook)
+CW -> SW : ping
+SW --> CW : 2xx / error
+CW --> GAP : alcanzable / no alcanzable
+GAP -> W : crear(url)
+GAP -> AP : crear(token, umbral, webhook, OPERATIVA)
+AP --> GAP : registrada
+GAP --> VA : confirmación
+VA --> U : presenta confirmación
+
+note right of GAP
+  Si webhook no es alcanzable, el
+  Usuario puede confirmar el registro
+  pese al aviso (CU-09 alt. 6b).
+end note
+
+@enduml

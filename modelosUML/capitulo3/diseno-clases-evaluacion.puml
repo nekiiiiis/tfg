@@ -1,0 +1,68 @@
+@startuml
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+hide circle
+
+package "application/evaluacion" {
+    class PriceUpdateHandler <<service>> {
+        + handle(ev): void  <<@OnEvent('PrecioActualizado')>>
+    }
+    class AlertEvaluator <<service>> <<strategy>> {
+        + evaluar(alerta, precio): boolean
+    }
+}
+
+package "application/notificacion" {
+    interface INotificacionService <<port-in>> {
+        + enviar(alerta, precio)
+    }
+    interface IWebhookConnector <<port-out>> {
+        + checkReachability(url): Promise<boolean>
+        + transmitir(n, url): Promise<Resultado>
+    }
+    interface INotificacionesRepository <<port-out>>
+    interface IRetryQueue <<port-out>>
+    class NotificacionService <<service>>
+    class AlertTriggeredHandler <<service>> {
+        + handle(ev): void  <<@OnEvent('AlertaDisparada')>>
+    }
+    class RetryWorker <<service>>
+}
+
+package "domain/notificacion" {
+    class Notificacion <<entity>>
+    enum EstadoEntrega {
+        PENDIENTE
+        ENTREGADA
+        FALLIDA
+    }
+    class Webhook <<value>>
+}
+
+package "infrastructure/persistence/postgres" {
+    class NotificacionesRepositoryTypeOrm <<repo>> #FFF3E0
+}
+package "infrastructure/persistence/redis" {
+    class RetryQueueRedis <<repo>> #FFF3E0
+}
+package "infrastructure/connectors/webhook" {
+    class WebhookConnectorHttp <<adapter>> #FFF3E0
+}
+
+PriceUpdateHandler ..> AlertEvaluator
+AlertTriggeredHandler ..> INotificacionService
+NotificacionService ..|> INotificacionService
+NotificacionService ..> IWebhookConnector
+NotificacionService ..> INotificacionesRepository
+NotificacionService ..> IRetryQueue
+NotificacionService ..> Notificacion
+RetryWorker ..> IRetryQueue
+RetryWorker ..> INotificacionService
+
+NotificacionesRepositoryTypeOrm ..|> INotificacionesRepository
+RetryQueueRedis ..|> IRetryQueue
+WebhookConnectorHttp ..|> IWebhookConnector
+Notificacion --> EstadoEntrega
+Notificacion --> Webhook
+
+@enduml

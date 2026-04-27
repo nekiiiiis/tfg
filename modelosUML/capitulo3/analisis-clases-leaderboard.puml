@@ -1,0 +1,55 @@
+@startuml
+
+skinparam linetype ortho
+hide stereotype
+
+class "VistaLeaderboard" as VL <<boundary>> {
+    + presentarParametros()
+    + actualizarClasificacion(filas)
+    + informarIndisponibilidad()
+}
+
+class "ConectorHyperliquid" as CH <<boundary>> {
+    + suscribirOperaciones(token)
+    + desuscribirOperaciones(token)
+    + publicarOperacionRecibida(op)
+}
+
+class "GestorConsultaLeaderboard" as GCL <<control>> {
+    + iniciarConsulta(mercado, token, temporalidad)
+    + finalizarConsulta(consultaId)
+    + manejarOperacionRecibida(op)
+}
+
+class "GestorCatalogoEntidades" as GCE <<control>> {
+    + resolverNombre(direccion)
+}
+
+class "LeaderboardEnVivo" as LEV <<entity>> {
+    - mercado
+    - token
+    - temporalidad
+    + agregar(operacion)
+    + extraerClasificacion()
+    + purgarOperacionesAntiguas()
+}
+
+class "Operacion" as OP <<entity>>
+class "Token" as T <<entity>>
+class "Mercado" as M <<entity>>
+class "Direccion" as D <<entity>>
+class "Entidad" as E <<entity>>
+
+VL ..> GCL : solicita
+GCL ..> CH : suscribe
+CH ..> GCL : <<event>>\nOperacionRecibida
+GCL --> LEV : mantiene
+GCL ..> GCE : resolverNombre
+LEV o-- OP
+OP --> T
+OP --> D
+T --> M
+E o-- D
+GCE --> E
+
+@enduml

@@ -1,0 +1,44 @@
+@startuml
+skinparam shadowing false
+skinparam sequenceMessageAlign direction
+
+actor "Usuario" as U
+participant "LeaderboardClient\n(WS, browser)" as CLI
+participant "LeaderboardGateway\n<<gateway>>" as GW
+participant "LeaderboardService\n<<service>>" as SVC
+participant "LeaderboardSnapshot\nRepository (Redis)\n<<repo>>" as REPO
+participant "AddressNameResolver\n<<service>>" as NAMES
+participant "EventBus" as BUS
+participant "OperationIngestion\nHandler\n<<service>>" as OIH
+participant "HyperliquidConnector\n<<adapter>>" as HLC
+actor "Hyperliquid L1" as HL
+
+U -> CLI : abrir vista
+CLI -> GW : WS connect + subscribe-leaderboard\n{mercado, token, temporalidad}
+GW -> SVC : suscribir(q, cliente)
+SVC -> REPO : obtenerTopN(terna, 50)
+REPO --> SVC : filas
+SVC -> NAMES : resolverNombres(direcciones)
+NAMES --> SVC : nombres
+SVC --> GW : snapshot inicial
+GW --> CLI : "leaderboard-snapshot" {filas}
+CLI --> U : presentar tabla
+
+== Flujo continuo (asíncrono) ==
+
+HL ->> HLC : trade (WS push)
+HLC ->> BUS : emit OperacionRecibida
+BUS ->> OIH : @OnEvent('OperacionRecibida')
+OIH -> REPO : añadirOperacion(terna, op)
+OIH ->> BUS : emit LeaderboardActualizado
+BUS ->> GW : @OnEvent('LeaderboardActualizado')
+GW --> CLI : "leaderboard-update" {delta}
+CLI --> U : refrescar fila afectada
+
+== Cierre ==
+
+U -> CLI : cerrar vista
+CLI -> GW : unsubscribe-leaderboard
+GW -> SVC : cancelar suscripción
+
+@enduml

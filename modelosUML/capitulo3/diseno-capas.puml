@@ -1,0 +1,65 @@
+@startuml
+skinparam packageStyle rectangle
+skinparam shadowing false
+hide stereotype
+left to right direction
+
+actor "Usuario" as U
+actor "Hyperliquid L1" as HL
+actor "Servicio Webhook" as SW
+
+package "Adaptadores primarios\n(Presentation)" as PRES #E3F2FD {
+    [REST Controller] as REST
+    [WebSocket Gateway] as WS
+}
+
+package "Adaptadores secundarios\n(Infrastructure)" as INFRA #FFF3E0 {
+    [Hyperliquid\nConnector] as HLC
+    [Webhook\nConnector] as WHC
+    [TypeORM\nRepositories] as TORM
+    [ioredis\nRepositories] as IORED
+}
+
+package "Núcleo" as CORE {
+    package "Aplicación" as APP #E8F5E9 {
+        [Servicios de aplicación]
+        [Puertos de entrada]
+        [Puertos de salida]
+        [Event Handlers]
+    }
+    package "Dominio" as DOM #F3E5F5 {
+        [Entidades]
+        [Value Objects]
+        [Eventos del dominio]
+        [Excepciones]
+    }
+}
+
+U --> REST : HTTPS
+U --> WS  : WebSocket
+HL --> HLC : WebSocket
+WHC --> SW : HTTPS
+
+REST ..> APP
+WS ..> APP
+HLC ..> APP
+WHC ..> APP
+TORM ..> APP
+IORED ..> APP
+
+APP --> DOM
+
+note right of DOM
+  No conoce a:
+  - Aplicación
+  - Infraestructura
+  - Presentación
+end note
+
+note bottom of APP
+  Define puertos (interfaces).
+  La inversión de dependencia
+  es DI de NestJS.
+end note
+
+@enduml

@@ -1,0 +1,69 @@
+@startuml
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+hide circle
+
+package "presentation/realtime" {
+    class LeaderboardGateway <<gateway>> {
+        + onSubscribe(q, socket): void
+        + notificar(ev): void
+    }
+}
+
+package "application/leaderboard" {
+    interface ILeaderboardService <<port-in>> {
+        + obtenerSnapshot(q): Promise<FilaLeaderboardDto[]>
+        + suscribir(q, cliente): Promise<Suscripcion>
+    }
+    interface ILeaderboardSnapshotRepository <<port-out>> {
+        + añadirOperacion(t, op)
+        + obtenerTopN(t, n)
+        + purgarVentana(t, hasta)
+    }
+    class LeaderboardService <<service>>
+    class OperationIngestionHandler <<service>> {
+        + handle(ev): void  <<@OnEvent('OperacionRecibida')>>
+    }
+}
+
+package "application/ingestion" {
+    interface IHyperliquidPort <<port-out>>
+}
+
+package "domain/leaderboard" {
+    class Operacion <<entity>>
+    class LeaderboardEnVivo <<entity>> <<conceptual>>
+    class Terna <<value>> {
+        + mercado
+        + token
+        + temporalidad
+    }
+}
+
+package "infrastructure/persistence/redis" {
+    class LeaderboardSnapshotRepositoryRedis <<repo>> #FFF3E0
+}
+
+package "infrastructure/connectors/hyperliquid" {
+    class HyperliquidConnector <<adapter>> #FFF3E0
+    class HyperliquidMessageParser #FFF3E0
+}
+
+LeaderboardGateway ..> ILeaderboardService
+LeaderboardService ..|> ILeaderboardService
+LeaderboardService ..> ILeaderboardSnapshotRepository
+OperationIngestionHandler ..> ILeaderboardSnapshotRepository
+OperationIngestionHandler ..> Operacion
+LeaderboardSnapshotRepositoryRedis ..|> ILeaderboardSnapshotRepository
+HyperliquidConnector ..|> IHyperliquidPort
+HyperliquidConnector ..> HyperliquidMessageParser
+HyperliquidConnector ..> Operacion
+LeaderboardEnVivo ..> Terna
+
+note right of LeaderboardEnVivo
+  Conceptual: se materializa
+  en Redis (Sorted Set) vía
+  el repositorio
+end note
+
+@enduml

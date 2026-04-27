@@ -1,0 +1,80 @@
+@startuml
+
+skinparam packageStyle rectangle
+hide stereotype
+
+package "S-PRES" as PRES {
+    class "VistaLeaderboard" as VL <<boundary>>
+    class "VistaEntidades" as VE <<boundary>>
+    class "VistaAlertas" as VA <<boundary>>
+}
+
+package "S-INGE" as INGE {
+    class "ConectorHyperliquid" as CH <<boundary>>
+}
+
+package "S-NOTI" as NOTI {
+    class "ConectorWebhook" as CW <<boundary>>
+    class "GestorEnvioNotificacion" as GEN <<control>>
+}
+
+package "S-LEAD" as LEAD {
+    class "GestorConsultaLeaderboard" as GCL <<control>>
+    class "LeaderboardEnVivo" as LEV <<entity>>
+}
+
+package "S-CATA" as CATA {
+    class "GestorCatalogoEntidades" as GCE <<control>>
+}
+
+package "S-ALER" as ALER {
+    class "GestorAlertasPrecio" as GAP <<control>>
+}
+
+package "S-EVAL" as EVAL {
+    class "GestorEvaluacionAlertas" as GEA <<control>>
+}
+
+package "Dominio (compartido)" as DOM {
+    class "Mercado" as M <<entity>>
+    class "Token" as T <<entity>>
+    class "Precio" as P <<entity>>
+    class "Operacion" as OP <<entity>>
+    class "Direccion" as D <<entity>>
+    class "Entidad" as E <<entity>>
+    class "AlertaPrecio" as AP <<entity>>
+    class "Webhook" as W <<entity>>
+    class "Notificacion" as N <<entity>>
+}
+
+VL ..> GCL
+VE ..> GCE
+VA ..> GAP
+VA ..> CW
+
+CH ..> GCL : <<event>>
+CH ..> GEA : <<event>>
+
+GCL ..> GCE : resolverNombre
+GCL --> LEV
+LEV o-- OP
+
+GAP ..> CW
+GEA ..> GAP
+GEA ..> GEN
+
+GEN ..> CW
+GEN --> N
+
+T --> M
+OP --> T
+OP --> D
+P --> T
+E o-- D
+AP --> T
+AP --> W
+N --> AP
+N --> P
+N --> W
+
+@enduml

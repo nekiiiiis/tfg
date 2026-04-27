@@ -1,0 +1,30 @@
+@startuml
+skinparam shadowing false
+
+actor "Usuario" as U
+participant "VistaXxx\n(React)" as V
+participant "XxxController\n<<controller>>" as C
+participant "XxxService\n<<service>>" as S
+participant "XxxRepository\n<<repo>>" as R
+participant "EventBus\n<<opcional>>" as B
+
+U -> V : interacción UI
+V -> C : HTTP\n(POST/GET/PATCH/DELETE)
+C -> C : validar DTO\n(class-validator)
+C -> S : método de aplicación
+activate S
+S -> S : validar reglas de negocio
+S -> R : SQL parametrizado\n(TypeORM)
+R --> S : entidad / lista / void
+S ->> B : emit XxxEvento\n(opcional, RS-04)
+S --> C : ResponseDto
+deactivate S
+C --> V : 200 / 201 / 204 / 4xx
+V --> U : confirmación / error
+
+note right of S
+  @Transactional si la
+  operación toca varias tablas
+end note
+
+@enduml

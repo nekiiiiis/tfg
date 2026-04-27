@@ -1,0 +1,49 @@
+@startuml
+
+skinparam packageStyle rectangle
+
+package "presentacion" as PRES {
+}
+
+package "ingestion" as INGE {
+}
+
+package "leaderboard" as LEAD {
+}
+
+package "catalogo" as CATA {
+}
+
+package "alertas" as ALER {
+}
+
+package "evaluacion" as EVAL {
+}
+
+package "notificacion" as NOTI {
+}
+
+package "dominio" as DOM {
+}
+
+PRES ..> LEAD
+PRES ..> CATA
+PRES ..> ALER
+
+INGE ..> LEAD : <<event>>
+INGE ..> EVAL : <<event>>
+
+LEAD ..> CATA
+EVAL ..> ALER
+EVAL ..> NOTI
+ALER ..> NOTI
+
+LEAD ..> DOM
+CATA ..> DOM
+ALER ..> DOM
+EVAL ..> DOM
+NOTI ..> DOM
+INGE ..> DOM
+PRES ..> DOM
+
+@enduml

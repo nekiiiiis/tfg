@@ -1,0 +1,40 @@
+@startuml
+skinparam shadowing false
+skinparam componentStyle rectangle
+hide stereotype
+
+[HyperliquidConnector] as HLC
+[OperationIngestionHandler] as OIH
+[PriceUpdateHandler] as PUH
+[AlertTriggeredHandler] as ATH
+[NotificacionService] as NS
+
+cloud "EventBus\n(EventEmitter2)" as BUS
+
+HLC -[#0277BD,bold]-> BUS : OperacionRecibida
+HLC -[#0277BD,bold]-> BUS : PrecioActualizado
+PUH -[#C62828,bold]-> BUS : AlertaDisparada
+NS  -[#2E7D32,bold]-> BUS : NotificacionConfirmada
+NS  -[#EF6C00,bold]-> BUS : NotificacionFallida
+
+BUS -[#0277BD,bold]-> OIH : OperacionRecibida
+BUS -[#0277BD,bold]-> PUH : PrecioActualizado
+BUS -[#C62828,bold]-> ATH : AlertaDisparada
+
+note bottom of BUS
+  - In-process (memoria compartida)
+  - At-most-once
+  - Sub-milisegundo
+end note
+
+note right of HLC
+  Productor único
+  (frontera de Ingestión)
+end note
+
+note right of NS
+  Productor en
+  CU-14 (CONFIRMADA / FALLIDA)
+end note
+
+@enduml

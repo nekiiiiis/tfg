@@ -1,0 +1,48 @@
+@startuml
+skinparam packageStyle rectangle
+skinparam shadowing false
+hide stereotype
+
+package "AppModule" as APPM {
+    package "Frontera" as FE {
+        component HttpModule
+        component RealtimeModule
+        component IngestionModule
+    }
+    package "Núcleo" as NU {
+        component LeaderboardModule
+        component CatalogoModule
+        component AlertasModule
+        component EvaluacionModule
+        component NotificacionModule
+    }
+    component "SharedKernelModule\n<<Global>>" as SKM
+}
+
+HttpModule       ..> CatalogoModule
+HttpModule       ..> AlertasModule
+RealtimeModule   ..> LeaderboardModule
+RealtimeModule   ..> CatalogoModule
+
+IngestionModule  ..> SKM
+
+LeaderboardModule ..> CatalogoModule
+LeaderboardModule ..> SKM
+
+CatalogoModule   ..> SKM
+
+AlertasModule    ..> NotificacionModule
+AlertasModule    ..> SKM
+
+EvaluacionModule ..> AlertasModule
+EvaluacionModule ..> SKM
+
+NotificacionModule ..> AlertasModule
+NotificacionModule ..> SKM
+
+note bottom of SKM
+  EventBus, Config, Logging,
+  TypeORM connection, Redis client
+end note
+
+@enduml

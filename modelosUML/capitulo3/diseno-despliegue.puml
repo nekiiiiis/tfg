@@ -1,0 +1,56 @@
+@startuml
+skinparam shadowing false
+skinparam nodesep 80
+skinparam ranksep 60
+
+actor "Usuario" as U
+cloud "Hyperliquid L1" as HL
+cloud "Servicio Webhook\n(n8n)" as SW
+
+node "Host Docker — Infinite Fieldx" as HOST {
+    rectangle "Red: fieldx-edge" as EDGE #E3F2FD {
+        node "frontend\n(nginx + React build)" as FE
+    }
+    rectangle "Red: fieldx-internal" as INT #FFF3E0 {
+        node "backend\n(Node 20 + NestJS)" as BE
+        database "postgres\n(PostgreSQL 16)" as PG
+        database "redis\n(Redis 7 + AOF)" as RD
+    }
+    folder "Volúmenes" as VOLS #ECEFF1 {
+        artifact "fieldx-postgres-data" as VPG
+        artifact "fieldx-redis-data" as VRD
+        artifact "fieldx-backend-logs" as VLOG
+    }
+}
+
+U --> FE : HTTPS 443
+FE --> BE : HTTP /api/* + WS /ws/*
+BE --> PG : TCP 5432
+BE --> RD : TCP 6379
+BE --> HL : WebSocket (saliente)
+BE --> SW : HTTPS POST (saliente)
+
+PG ..> VPG : datos persistentes
+RD ..> VRD : AOF
+BE ..> VLOG : logs
+
+note right of FE
+  Único puerto expuesto: 443.
+  Termina TLS.
+  Reverse proxy a /api/* y /ws/*.
+end note
+
+note right of BE
+  Subsistemas:
+  S-PRES, S-INGE, S-LEAD,
+  S-CATA, S-ALER, S-EVAL, S-NOTI
+  + EventBus en proceso
+end note
+
+note bottom of HOST
+  restart: unless-stopped
+  health checks Docker
+  depends_on: service_healthy
+end note
+
+@enduml

@@ -1,0 +1,39 @@
+@startuml
+
+skinparam linetype ortho
+hide stereotype
+
+class "VistaEntidades" as VE <<boundary>> {
+    + presentarRelacionEntidades(entidades)
+    + presentarRelacionDirecciones(direcciones)
+    + presentarFormularioEntidad()
+    + presentarFormularioDireccion()
+    + solicitarConfirmacion()
+    + informarConflicto(motivo)
+}
+
+class "GestorCatalogoEntidades" as GCE <<control>> {
+    + crearEntidad(nombre)
+    + listarEntidades(filtro)
+    + editarEntidad(entidadId, nuevoNombre)
+    + eliminarEntidad(entidadId)
+    + añadirDireccion(entidadId, direccion)
+    + listarDirecciones(entidadId, filtro)
+    + eliminarDireccion(direccion)
+    + resolverNombre(direccion)
+}
+
+class "Entidad" as E <<entity>> {
+    - nombre
+}
+
+class "Direccion" as D <<entity>> {
+    - valor
+}
+
+VE ..> GCE
+GCE --> E
+GCE --> D
+E "1" o-- "*" D : agrupa
+
+@enduml

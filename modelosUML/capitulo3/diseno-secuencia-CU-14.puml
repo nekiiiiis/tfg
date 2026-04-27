@@ -1,0 +1,50 @@
+@startuml
+skinparam shadowing false
+
+participant "EventBus" as BUS
+participant "AlertTriggeredHandler\n<<service>>" as ATH
+participant "NotificacionService\n<<service>>" as NS
+participant "NotificacionesRepository\n<<repo>>" as NREPO
+participant "WebhookConnector\n<<adapter>>" as WHC
+actor "Servicio Webhook" as SW
+participant "AlertasService\n<<service>>" as AS
+participant "RetryQueue (Redis)\n<<repo>>" as RQ
+
+BUS ->> ATH : @OnEvent('AlertaDisparada')
+activate ATH
+
+ATH -> NS : enviar(alerta, precio)
+activate NS
+
+NS -> NREPO : save(notif PENDIENTE)
+NREPO --> NS : id
+
+NS -> WHC : transmitir(notif, webhook)
+WHC -> SW : HTTPS POST {payload}
+
+alt 2xx OK
+    SW --> WHC : 200
+    WHC --> NS : OK
+    NS -> NREPO : update ENTREGADA
+    NS -> AS : rearmarAlerta(alertaId)
+    NS ->> BUS : emit NotificacionConfirmada
+else fallo / timeout
+    SW --> WHC : 5xx / timeout
+    WHC --> NS : FALLO
+    NS -> NREPO : update FALLIDA + ultimo_error
+    NS -> AS : marcarNotificacionFallida(alertaId)
+    NS -> RQ : enqueue({notifId, intento=1})
+    NS ->> BUS : emit NotificacionFallida
+end
+
+deactivate NS
+deactivate ATH
+
+== Retry asíncrono (otra activación) ==
+
+participant "RetryWorker\n<<service>>" as RW
+RQ ->> RW : BRPOP (intento N)
+RW -> NS : reintentar(notifId)
+note right: mismo flujo a partir\ndel transmitir(...)
+
+@enduml

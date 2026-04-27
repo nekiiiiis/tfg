@@ -1,0 +1,37 @@
+@startuml
+skinparam shadowing false
+
+actor "Usuario" as U
+participant "AlertaFormView\n(React)" as VIEW
+participant "AlertasController\n<<controller>>" as CTRL
+participant "AlertasService\n<<service>>" as SVC
+participant "CatalogoQueryService\n<<service>>" as CAT
+participant "WebhookConnector\n<<adapter>>" as WHC
+participant "AlertasRepository\n<<repo>>" as REPO
+participant "EventBus" as BUS
+
+U -> VIEW : completar formulario
+VIEW -> CTRL : POST /api/alertas\nCrearAlertaDto
+CTRL -> CTRL : validar (class-validator)
+
+CTRL -> SVC : crear(dto)
+activate SVC
+
+SVC -> CAT : existeToken(symbol, mercado)
+CAT --> SVC : true
+
+SVC -> WHC : checkReachability(webhook)
+WHC --> SVC : alcanzable=true|false
+
+SVC -> SVC : Mapper.fromDto(dto)\n+ cifrar webhook
+SVC -> REPO : save(alerta)\n[transactional]
+REPO --> SVC : ok
+
+SVC ->> BUS : emit AlertaCreada
+SVC --> CTRL : AlertaResponseDto
+deactivate SVC
+
+CTRL --> VIEW : 201 Created\n(sin URL webhook)
+VIEW --> U : confirmación\n+ aviso si webhook no alcanzable
+
+@enduml

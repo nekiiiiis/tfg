@@ -1,0 +1,39 @@
+@startuml
+skinparam shadowing false
+
+actor "Hyperliquid L1" as HL
+participant "HyperliquidConnector\n<<adapter>>" as HLC
+participant "EventBus" as BUS
+participant "PriceUpdateHandler\n<<service>>" as PUH
+participant "AlertasQueryService\n<<service>>" as AQS
+participant "AlertEvaluator\n<<service>>" as EVAL
+participant "AlertasRepository\n<<repo>>" as REPO
+
+HL ->> HLC : tick (WS push)
+HLC ->> BUS : emit PrecioActualizado(token, precio)
+BUS ->> PUH : @OnEvent('PrecioActualizado')
+
+activate PUH
+PUH -> AQS : recuperarOperativasPara(token)
+AQS --> PUH : List<AlertaPrecio>
+
+loop por cada alerta
+    PUH -> EVAL : evaluar(alerta, precio)
+    EVAL --> PUH : cumple? (boolean)
+    alt cumple
+        PUH -> REPO : marcarComoDisparada(alertaId)\n[transactional]
+        REPO --> PUH : ok
+        PUH ->> BUS : emit AlertaDisparada(alertaId, precio)
+    else no cumple
+        note right: silencio
+    end
+end
+deactivate PUH
+
+note right of BUS
+  AlertaDisparada será consumida por
+  AlertTriggeredHandler en S-NOTI
+  (CU-14, secuencia aparte)
+end note
+
+@enduml

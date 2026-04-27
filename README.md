@@ -29,7 +29,7 @@ Universidad Europea del Atlántico — Curso 2025–2026
 |-|-|-|:-:|
 |1.ª|[Capítulo 1](docs/capitulo1/README.md)|Contextualización, estado del arte, objetivos y metodología|✅|
 |2.ª|[Capítulo 2](docs/capitulo2/README.md)|Disciplina de requisitos|✅|
-|3.ª|[Capítulo 3](docs/capitulo3/README.md)|Análisis y diseño|🔲|
+|3.ª|[Capítulo 3](docs/capitulo3/README.md)|Análisis y diseño|✅|
 |4.ª|[Capítulos finales](docs/capitulosFinales/README.md)|Descripción de la solución, conclusiones, discusión, recomendaciones y futuras líneas|🔲|
 
 </div>
@@ -107,10 +107,10 @@ Universidad Europea del Atlántico — Curso 2025–2026
 
 ||Actividad|
 |-|-|
-|🔲|[Análisis de la arquitectura](docs/capitulo3/analisisArquitectura.md)|
-|🔲|[Análisis de casos de uso](docs/capitulo3/analisisCdU.md)|
-|🔲|[Análisis de clases](docs/capitulo3/analisisClases.md)|
-|🔲|[Análisis de paquetes](docs/capitulo3/analisisPaquetes.md)|
+|✅|[Análisis de la arquitectura](docs/capitulo3/analisisArquitectura.md)|
+|✅|[Análisis de casos de uso](docs/capitulo3/analisisCdU.md)|
+|✅|[Análisis de clases](docs/capitulo3/analisisClases.md)|
+|✅|[Análisis de paquetes](docs/capitulo3/analisisPaquetes.md)|
 
 </div>
 
@@ -120,12 +120,12 @@ Universidad Europea del Atlántico — Curso 2025–2026
 
 ||Actividad|
 |-|-|
-|🔲|[Diseño de la arquitectura](docs/capitulo3/disenoArquitectura.md)|
-|🔲|[Diseño de casos de uso](docs/capitulo3/disenoCdU.md)|
-|🔲|[Diseño de clases](docs/capitulo3/disenoClases.md)|
-|🔲|[Diseño de paquetes](docs/capitulo3/disenoPaquetes.md)|
-|🔲|[Diagramas de despliegue](docs/capitulo3/despliegue.md)|
-|🔲|[Modelo de datos](docs/capitulo3/modeloDeDatos.md)|
+|✅|[Diseño de la arquitectura](docs/capitulo3/disenoArquitectura.md)|
+|✅|[Diseño de casos de uso](docs/capitulo3/disenoCdU.md)|
+|✅|[Diseño de clases](docs/capitulo3/disenoClases.md)|
+|✅|[Diseño de paquetes](docs/capitulo3/disenoPaquetes.md)|
+|✅|[Diagramas de despliegue](docs/capitulo3/despliegue.md)|
+|✅|[Modelo de datos](docs/capitulo3/modeloDeDatos.md)|
 
 </div>
 
@@ -172,7 +172,7 @@ Universidad Europea del Atlántico — Curso 2025–2026
 |-|-|-|:-:|
 |Inicio|Contextualización y viabilidad|Cap. 1|✅|
 |Elaboración|Modelado del dominio, Requisitos|Cap. 2|✅|
-|Elaboración|Análisis, Diseño|Cap. 3|🔲|
+|Elaboración|Análisis, Diseño|Cap. 3|✅|
 |Construcción|Implementación, Pruebas|Caps. finales|🔲|
 |Transición|Futuras líneas|Caps. finales|🔲|
 

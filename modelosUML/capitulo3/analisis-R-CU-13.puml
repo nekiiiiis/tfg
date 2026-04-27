@@ -1,0 +1,30 @@
+@startuml
+
+actor "Hyperliquid L1" as HL
+
+boundary "ConectorHyperliquid" as CH
+control "GestorEvaluacionAlertas" as GEA
+control "GestorEnvioNotificacion" as GEN
+entity "Precio" as P
+entity "AlertaPrecio" as AP
+
+HL -> CH : actualización de precio (token, precio)
+CH -> CH : publicar evento\nPrecioActualizado
+CH --> GEA : PrecioActualizado(token, precio)
+GEA -> P : registrar(token, precio)
+GEA -> AP : recuperarOperativasPara(token)
+AP --> GEA : { alertas operativas }
+loop por cada alerta operativa
+    GEA -> AP : evaluarCondicion(precio)
+    alt condición cumplida
+        GEA -> AP : marcar(DISPARADA)
+        GEA -> GEN : enviar(alerta, precio)
+        note right
+          <<include>> CU-14
+        end note
+    else condición no cumplida
+        GEA -> GEA : descartar
+    end
+end
+
+@enduml

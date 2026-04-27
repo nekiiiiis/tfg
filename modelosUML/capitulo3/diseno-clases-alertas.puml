@@ -1,0 +1,88 @@
+@startuml
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+hide circle
+
+package "presentation/http/alertas" {
+    class AlertasController <<controller>> {
+        + crear(dto): AlertaResponseDto
+        + listar(filtro): AlertaResponseDto[]
+        + editar(id, dto): AlertaResponseDto
+        + eliminar(id): void
+    }
+}
+
+package "application/alertas" {
+    interface IAlertasService <<port-in>> {
+        + crear(dto): Promise<AlertaResponseDto>
+        + listar(filtro): Promise<AlertaResponseDto[]>
+        + editar(id, dto): Promise<AlertaResponseDto>
+        + eliminar(id): Promise<void>
+    }
+    interface IAlertasQueryService <<port-in>> {
+        + recuperarOperativasPara(token): Promise<AlertaPrecio[]>
+    }
+    interface IAlertasRepository <<port-out>> {
+        + save(a): Promise<void>
+        + findById(id): Promise<AlertaPrecio?>
+        + findOperativasPorToken(t): Promise<AlertaPrecio[]>
+        + delete(id): Promise<void>
+    }
+    class AlertasService <<service>> {
+        - alertas: IAlertasRepository
+        - catalogo: ICatalogoQueryService
+        - webhook: IWebhookConnector
+        - bus: IEventBus
+        + crear(dto): Promise<AlertaResponseDto>
+        + listar(filtro)
+        + editar(id, dto)
+        + eliminar(id)
+    }
+    class AlertaPrecioMapper <<mapper>> {
+        + fromDto(dto, token): AlertaPrecio
+        + toResponse(a, alcanzable): AlertaResponseDto
+    }
+    class CrearAlertaDto <<dto>>
+    class AlertaResponseDto <<dto>>
+}
+
+package "domain/alertas" {
+    class AlertaPrecio <<entity>> {
+        - estado: EstadoAlerta
+        + evaluar(precio): boolean
+        + marcarDisparada(): void
+        + rearmar(): void
+    }
+    enum EstadoAlerta {
+        OPERATIVA
+        DISPARADA
+        NOTIFICACION_FALLIDA
+    }
+    class Umbral <<value>>
+}
+
+package "infrastructure/persistence/postgres" {
+    class AlertaOrmEntity <<orm>> #FFF3E0
+    class AlertasRepositoryTypeOrm <<repo>> #FFF3E0 {
+        + save(a)
+        + findById(id)
+        + findOperativasPorToken(t)
+        + delete(id)
+    }
+    class AlertaOrmMapper <<mapper>> #FFF3E0
+}
+
+AlertasController ..> IAlertasService
+AlertasService ..|> IAlertasService
+AlertasService ..|> IAlertasQueryService
+AlertasService ..> IAlertasRepository
+AlertasService ..> AlertaPrecioMapper
+AlertasService ..> AlertaPrecio
+AlertaPrecio --> EstadoAlerta
+AlertaPrecio --> Umbral
+
+AlertasRepositoryTypeOrm ..|> IAlertasRepository
+AlertasRepositoryTypeOrm ..> AlertaOrmEntity
+AlertasRepositoryTypeOrm ..> AlertaOrmMapper
+
+@enduml

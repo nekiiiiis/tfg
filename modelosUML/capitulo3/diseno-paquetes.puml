@@ -1,0 +1,57 @@
+@startuml
+skinparam packageStyle rectangle
+skinparam shadowing false
+hide stereotype
+
+package "presentation" as PRES #E3F2FD {
+    package "http" as HTTP
+    package "realtime" as RT
+}
+
+package "application" as APP #E8F5E9 {
+    package "catalogo" as A_CAT
+    package "alertas" as A_ALER
+    package "leaderboard" as A_LEAD
+    package "ingestion" as A_INGE
+    package "evaluacion" as A_EVAL
+    package "notificacion" as A_NOTI
+    package "shared" as A_SH
+}
+
+package "infrastructure" as INFRA #FFF3E0 {
+    package "persistence/postgres" as I_PG
+    package "persistence/redis" as I_RD
+    package "connectors/hyperliquid" as I_HL
+    package "connectors/webhook" as I_WH
+    package "eventbus" as I_BUS
+}
+
+package "domain" as DOM #F3E5F5 {
+    package "shared" as D_SH
+    package "catalogo" as D_CAT
+    package "alertas" as D_ALER
+    package "leaderboard" as D_LEAD
+    package "mercado" as D_MER
+    package "notificacion" as D_NOTI
+    package "events" as D_EV
+}
+
+package "shared (kernel)" as KERN #ECEFF1
+
+PRES ..> APP
+INFRA ..> APP
+APP ..> DOM
+PRES ..> DOM
+INFRA ..> DOM
+PRES ..> KERN
+APP ..> KERN
+INFRA ..> KERN
+
+note bottom of DOM
+  Sin dependencias salientes.
+  Imports prohibidos hacia
+  application/, infrastructure/,
+  presentation/ por ESLint.
+end note
+
+@enduml

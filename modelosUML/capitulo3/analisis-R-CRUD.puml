@@ -1,0 +1,29 @@
+@startuml
+
+actor Usuario as U
+
+boundary "Vista*" as V
+control "GestorCRUD\n(GestorCatalogoEntidades /\nGestorAlertasPrecio)" as G
+entity "Entidad*\n(Entidad / Direccion /\nAlertaPrecio)" as E
+
+U -> V : solicita operación CRUD
+V -> U : permite introducir / seleccionar
+U -> V : introduce / selecciona
+V -> G : operación(parámetros)
+G -> E : validar
+G -> E : crear / leer / modificar / eliminar
+E --> G : ok / error
+G --> V : confirmación / motivo
+V --> U : presenta resultado
+
+note right of G
+  Patrón aplicable a:
+  CU-02..CU-08, CU-10..CU-12.
+  Cada CdU concreta:
+  - Boundary (Vista*)
+  - Control (Gestor*)
+  - Entidad afectada
+  - Reglas de validación
+end note
+
+@enduml

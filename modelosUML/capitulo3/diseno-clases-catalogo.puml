@@ -1,0 +1,52 @@
+@startuml
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+hide circle
+
+package "presentation/http/catalogo" {
+    class EntidadesController <<controller>>
+    class DireccionesController <<controller>>
+}
+
+package "application/catalogo" {
+    interface ICatalogoService <<port-in>>
+    interface ICatalogoQueryService <<port-in>> {
+        + resolverNombre(direccion)
+        + resolverToken(symbol)
+        + existeToken(symbol, mercado)
+    }
+    interface IEntidadesRepository <<port-out>>
+    interface IDireccionesRepository <<port-out>>
+    class CatalogoService <<service>>
+    class AddressNameResolver <<service>>
+}
+
+package "domain/catalogo" {
+    class Entidad <<entity>>
+    class Direccion <<value>>
+}
+
+package "infrastructure/persistence/postgres" {
+    class EntidadesRepositoryTypeOrm <<repo>> #FFF3E0
+    class DireccionesRepositoryTypeOrm <<repo>> #FFF3E0
+}
+
+EntidadesController ..> ICatalogoService
+DireccionesController ..> ICatalogoService
+CatalogoService ..|> ICatalogoService
+CatalogoService ..|> ICatalogoQueryService
+CatalogoService ..> IEntidadesRepository
+CatalogoService ..> IDireccionesRepository
+AddressNameResolver ..> ICatalogoQueryService
+EntidadesRepositoryTypeOrm ..|> IEntidadesRepository
+DireccionesRepositoryTypeOrm ..|> IDireccionesRepository
+Entidad o-- Direccion
+
+note right of ICatalogoQueryService
+  Interface segregada (ISP):
+  consumida por LeaderboardService
+  y AlertasService sin cargar la
+  parte de mutación de ICatalogoService
+end note
+
+@enduml

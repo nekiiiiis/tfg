@@ -1,0 +1,40 @@
+@startuml
+
+skinparam packageStyle rectangle
+hide stereotype
+
+package "Frontera" as F {
+    package "S-PRES\nPresentación" as PRES
+    package "S-INGE\nIngestión" as INGE
+    package "S-NOTI\nNotificación" as NOTI
+}
+
+package "Núcleo" as N {
+    package "S-LEAD\nLeaderboard" as LEAD
+    package "S-CATA\nCatálogo" as CATA
+    package "S-ALER\nAlertas" as ALER
+    package "S-EVAL\nEvaluación" as EVAL
+}
+
+PRES ..> LEAD
+PRES ..> CATA
+PRES ..> ALER
+INGE ..> LEAD : <<event>>\nOperacionRecibida
+INGE ..> EVAL : <<event>>\nPrecioActualizado
+EVAL ..> ALER : consulta
+EVAL ..> NOTI : <<include>>\nCU-13 → CU-14
+LEAD ..> CATA : resuelve nombres
+
+note bottom of F
+  Subsistemas de frontera:
+  traducen entre actores externos
+  y el núcleo del sistema.
+end note
+
+note bottom of N
+  Subsistemas del núcleo:
+  contienen el control y las
+  entidades de cada CdU.
+end note
+
+@enduml

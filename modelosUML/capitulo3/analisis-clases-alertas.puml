@@ -1,0 +1,45 @@
+@startuml
+
+skinparam linetype ortho
+hide stereotype
+
+class "VistaAlertas" as VA <<boundary>> {
+    + presentarRelacionAlertas(alertas)
+    + presentarFormularioAlerta()
+    + solicitarConfirmacion()
+    + informarConflicto(motivo)
+    + informarAdvertenciaWebhook(motivo)
+}
+
+class "GestorAlertasPrecio" as GAP <<control>> {
+    + crearAlerta(token, umbral, webhook)
+    + listarAlertas(filtro)
+    + editarAlerta(alertaId, parametros)
+    + eliminarAlerta(alertaId)
+    + recuperarOperativasPara(token)
+    + marcarComoDisparada(alertaId)
+    + rearmarAlerta(alertaId)
+    + marcarNotificacionFallida(alertaId)
+}
+
+class "ConectorWebhook" as CW <<boundary>> {
+    + comprobarAlcanzabilidad(webhook)
+}
+
+class "AlertaPrecio" as AP <<entity>> {
+    - umbral
+    - estado: Operativa | Disparada | NotificacionFallida
+}
+
+class "Token" as T <<entity>>
+class "Webhook" as W <<entity>> {
+    - url
+}
+
+VA ..> GAP
+GAP ..> CW : valida\nalcanzabilidad
+GAP --> AP
+AP --> T
+AP --> W
+
+@enduml

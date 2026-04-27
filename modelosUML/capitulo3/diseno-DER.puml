@@ -1,0 +1,75 @@
+@startuml
+skinparam shadowing false
+hide circle
+skinparam linetype ortho
+
+entity "entidades" as ENT {
+    *id : UUID <<PK>>
+    --
+    *nombre : VARCHAR(64) <<U>>
+    *creada_en : TIMESTAMPTZ
+    *actualizada : TIMESTAMPTZ
+}
+
+entity "direcciones" as DIR {
+    *id : UUID <<PK>>
+    --
+    *valor : CHAR(42) <<U>>
+    *entidad_id : UUID <<FK>>
+    *añadida_en : TIMESTAMPTZ
+}
+
+entity "alertas" as ALER {
+    *id : UUID <<PK>>
+    --
+    *token_simbolo : VARCHAR(16)
+    *mercado : VARCHAR(16)
+    *umbral_valor : NUMERIC(28,8)
+    *umbral_cruce : cruce
+    *webhook_url_enc : BYTEA
+    *estado : estado_alerta
+    *creada_en : TIMESTAMPTZ
+    ultima_disparo : TIMESTAMPTZ
+    ultimo_intento : TIMESTAMPTZ
+    --
+    idx (token_simbolo, estado)
+    idx (estado) WHERE estado <> 'OPERATIVA'
+}
+
+entity "notificaciones" as NOTI {
+    *id : UUID <<PK>>
+    --
+    *alerta_id : UUID <<FK>>
+    *precio_disparador : NUMERIC(28,8)
+    *instante_emision : TIMESTAMPTZ
+    *estado : estado_entrega
+    *intento : SMALLINT
+    ultimo_error : TEXT
+    entregada_en : TIMESTAMPTZ
+    --
+    idx (alerta_id, instante_emision DESC)
+    idx (estado) WHERE estado = 'PENDIENTE'
+}
+
+entity "eventos_auditoria" as AUD {
+    *id : BIGSERIAL <<PK>>
+    --
+    *nombre : VARCHAR(64)
+    *payload : JSONB
+    *ocurrido_en : TIMESTAMPTZ
+}
+
+ENT ||--o{ DIR  : "1 entidad : N direcciones\nON DELETE CASCADE"
+ALER ||--o{ NOTI : "1 alerta : N notificaciones\nON DELETE CASCADE"
+
+note right of ALER
+  webhook_url_enc cifrado con
+  pgp_sym_encrypt (RS-10)
+end note
+
+note bottom of AUD
+  Preparado para RS-04;
+  no usado en el alcance
+end note
+
+@enduml

@@ -1,6 +1,5 @@
 @startuml
 skinparam shadowing false
-skinparam sequenceMessageAlign direction
 
 actor "Usuario" as U
 participant "LeaderboardPage\n+ AppDataContext\n(React)" as CLI
@@ -15,7 +14,7 @@ participant "CatalogoService\n<<service>>" as CAT
 actor "Hyperliquid L1" as HL
 
 U -> CLI : abrir vista
-CLI -> GW : WS /ws/leaderboard\nsubscribe {mercado, token, temporalidad}
+CLI -> GW : WS /ws/leaderboard — subscribe (mercado, token, temporalidad)
 GW -> SVC : subscribe(terna, {topN})
 activate SVC
 SVC -> META : resolveToken(mercado, displayToken)
@@ -24,13 +23,13 @@ SVC -> HLC : subscribeTrades(feedCoin)
 activate HLC
 SVC -> TP : getHistorical(mercado, token, sinceMs)
 TP --> SVC : trades históricos
-SVC -> STATE : ingestBackfill(terna, ops[])
+SVC -> STATE : ingestBackfill(terna, ops)
 SVC -> STATE : snapshot(terna, topN)
 STATE --> SVC : filas iniciales
 SVC --> GW : snapshot inicial
 deactivate SVC
-GW --> CLI : {type: "snapshot", rows}
-CLI -> CAT : POST /api/direcciones/resolver(addrs[])
+GW --> CLI : snapshot (type, rows)
+CLI -> CAT : POST /api/direcciones/resolver(addrs)
 CAT --> CLI : nombres
 CLI --> U : tabla con nombres
 
@@ -45,13 +44,13 @@ SVC -> STATE : ingest(terna, op)
 SVC ->> BUS : emit LeaderboardActualizado
 deactivate SVC
 BUS ->> GW : LeaderboardActualizado
-GW --> CLI : {type: "update", delta}
+GW --> CLI : update (delta)
 CLI --> U : refrescar fila
 
 == Polling adaptativo (red de seguridad) ==
 
 SVC -> HLC : getRecentTrades(feedCoin)
-HLC --> SVC : ops[]
+HLC --> SVC : ops
 SVC -> SVC : dedupe + ingest
 
 == Cierre y keep-alive ==

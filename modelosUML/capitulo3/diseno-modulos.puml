@@ -1,4 +1,5 @@
 @startuml
+scale max 3600 width
 skinparam packageStyle rectangle
 skinparam shadowing false
 hide stereotype

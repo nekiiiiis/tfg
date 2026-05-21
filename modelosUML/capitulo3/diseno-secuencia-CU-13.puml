@@ -1,52 +1,43 @@
 @startuml
+scale 0.75
 skinparam shadowing false
+skinparam maxMessageSize 120
 
-actor "Hyperliquid L1" as HL
-participant "PublicWsAdapter\n<<adapter>>" as HLC
-participant "server.ts\n(composition root)" as ROOT
-participant "MetaService\n<<service>>" as META
-participant "TypedBus" as BUS
-participant "wireEvaluacion\n<<handler>>" as EV
-participant "Drizzle\n(tabla alertas)" as DB
-participant "evaluarAlertasContraPrecio\n<<pure>>" as PRED
-participant "NotificacionService\n<<service>>" as NS
+actor Hyperliquid as HL
+participant "HL Adapter" as HLC
+participant "server.ts" as ROOT
+participant "MetaSvc" as META
+participant "Bus" as BUS
+participant "wireEval" as EV
+participant "Drizzle" as DB
+participant "evaluator" as PRED
+participant "NotifSvc" as NS
 
-HL ->> HLC : allMids (WS push)
-HLC ->> ROOT : onAllMids(mids)
-
+HL ->> HLC : allMids
+HLC -> ROOT : onAllMids
 activate ROOT
-ROOT -> META : getMidsKeyToDisplay()
-META --> ROOT : map midsKey → displayToken
-loop por cada precio que cambia
-    ROOT ->> BUS : emit PrecioActualizado(token, precio, ts)
+ROOT -> META : midsKey → display
+META --> ROOT : mapa
+loop precio cambiado
+    ROOT ->> BUS : PrecioActualizado
 end
 deactivate ROOT
 
 BUS ->> EV : PrecioActualizado
 activate EV
-
-EV -> DB : SELECT alertas\nWHERE token=? AND estado='OPERATIVA'\n(idx alertas_token_estado)
-DB --> EV : alertas[]
-
-EV -> PRED : evaluarAlertasContraPrecio(alertas, precio)
-PRED --> EV : ids disparados
-
-loop por cada alerta disparada
-    EV -> DB : UPDATE alertas\nSET estado='DISPARADA',\n    ultimo_disparo=now()
-    EV ->> BUS : emit AlertaDisparada
-    EV -> NS : dispararParaAlerta(id, precio)\n(realización síncrona de CU-14)
+EV -> DB : SELECT OPERATIVA por token
+DB --> EV : alertas
+EV -> PRED : evaluar(alertas, precio)
+PRED --> EV : ids
+loop alerta disparada
+    EV -> DB : UPDATE DISPARADA
+    EV ->> BUS : AlertaDisparada
+    EV -> NS : dispararParaAlerta
 end
-
 deactivate EV
 
 note right of PRED
-  Predicado puro en dominio:
-  evaluarUmbral(umbral, precio)
-end note
-
-note right of NS
-  La realización de CU-14
-  continúa en su propia secuencia.
+  evaluarUmbral (dominio)
 end note
 
 @enduml

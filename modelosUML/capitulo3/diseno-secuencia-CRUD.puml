@@ -1,38 +1,32 @@
 @startuml
+scale 0.75
 skinparam shadowing false
+skinparam maxMessageSize 120
 
-actor "Usuario" as U
-participant "Page + Form\n(React)" as V
-participant "registerXxxRoutes\n<<gateway>>" as C
-participant "Validador Zod" as Z
-participant "XxxService\n<<service>>" as S
-participant "Drizzle\n(tabla destino)" as R
+actor Usuario as U
+participant "React UI" as V
+participant "Routes" as C
+participant "Zod" as Z
+participant "Service" as S
+participant "Drizzle" as R
 
-U -> V : interacción UI
-V -> C : HTTP\n(POST / GET / PATCH / DELETE)
-C -> Z : parse(body, params)
-Z --> C : datos tipados\n(o 400 si inválido)
-C -> S : método del CdU
+U -> V : UI
+V -> C : HTTP CRUD
+C -> Z : parse
+Z --> C : DTO o 400
+C -> S : método CdU
 activate S
-S -> S : validar invariantes\n(unicidad, FK, formato)
-S -> R : SQL parametrizado\n(insert / select / update / delete)
-R --> S : entidad / lista / void
-S --> C : resultado
+S -> S : invariantes
+S -> R : SQL
+R --> S : resultado
+S --> C : entidad
 deactivate S
-C --> V : 200 / 201 / 204\no 4xx con DomainError
-V --> U : confirmación / error
+C --> V : 2xx / 4xx
+V --> U : confirmación
 
 note over S
-  Filtro global mapea
-  DomainError → HTTP en
-  app/src/shared/errors.ts
-end note
-
-note over R
-  El servicio integra el acceso
-  Drizzle: no hay capa de
-  repositorio explícita porque
-  no añade valor.
+  DomainError → HTTP
+  (errors.ts)
 end note
 
 @enduml

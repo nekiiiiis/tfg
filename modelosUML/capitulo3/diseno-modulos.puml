@@ -3,46 +3,109 @@ skinparam packageStyle rectangle
 skinparam shadowing false
 hide stereotype
 
-package "AppModule" as APPM {
-    package "Frontera" as FE {
-        component HttpModule
-        component RealtimeModule
-        component IngestionModule
+package "src/app/src" as APPSRC {
+
+    component "server.ts\n<<composition root>>" as ROOT
+
+    package "modules/" as MODS {
+        package "leaderboard" as LB {
+            component "leaderboard.service"
+            component "leaderboard.state"
+            component "trade-persistence.service"
+            component "leaderboard-balances.service"
+            component "leaderboard.ws\n<<gateway>>"
+        }
+        package "catalogo" as CAT {
+            component "catalogo.service"
+            component "catalogo.routes"
+        }
+        package "meta" as META {
+            component "meta.service"
+            component "meta.routes"
+        }
+        package "direccion-detalle" as DD {
+            component "address-detail.service"
+            component "direccion-detalle.routes"
+        }
+        package "alertas" as AL {
+            component "alertas.service"
+            component "alertas.routes"
+        }
+        package "evaluacion" as EV {
+            component "evaluator\n<<pure>>"
+            component "evaluacion.subscriber\n<<handler>>"
+        }
+        package "notificacion" as NOT {
+            component "notificacion.service"
+            component "webhook.connector\n<<adapter>>"
+            component "retry.worker"
+        }
     }
-    package "Núcleo" as NU {
-        component LeaderboardModule
-        component CatalogoModule
-        component AlertasModule
-        component EvaluacionModule
-        component NotificacionModule
+
+    package "sources/" as SRC {
+        component "hyperliquid.port\n<<port>>" as PORT
+        component "public-ws.adapter\n<<adapter>>"
+        component "nanoreth-rpc.adapter\n<<adapter>>"
+        component "index (factory)"
     }
-    component "SharedKernelModule\n<<Global>>" as SKM
+
+    package "persistence/" as PERS {
+        component "db (postgres-js + drizzle)"
+        component "crypto (pgcrypto)"
+        component "schema/*"
+        component "migrations/*"
+        component "ensure-schema"
+    }
+
+    package "domain/" as DOMP {
+        component "types"
+        component "events"
+        component "errors"
+    }
+
+    package "shared/" as SH {
+        component "logger (pino)"
+        component "errors (HTTP map)"
+        component "health"
+    }
+
+    component "bus\n<<TypedBus>>" as BUS
 }
 
-HttpModule       ..> CatalogoModule
-HttpModule       ..> AlertasModule
-RealtimeModule   ..> LeaderboardModule
-RealtimeModule   ..> CatalogoModule
+ROOT ..> LB
+ROOT ..> CAT
+ROOT ..> META
+ROOT ..> DD
+ROOT ..> AL
+ROOT ..> EV
+ROOT ..> NOT
+ROOT ..> SRC
+ROOT ..> PERS
+ROOT ..> SH
+ROOT ..> BUS
 
-IngestionModule  ..> SKM
+LB ..> SRC : usa PORT
+LB ..> PERS
+LB ..> META
+LB ..> BUS
+CAT ..> PERS
+META ..> SH
+DD ..> SRC : usa PORT
+DD ..> META
+AL ..> PERS
+AL ..> NOT : check webhook
+EV ..> BUS
+EV ..> PERS
+EV ..> NOT
+NOT ..> PERS
+NOT ..> BUS
+SRC ..> DOMP
+PERS ..> DOMP
 
-LeaderboardModule ..> CatalogoModule
-LeaderboardModule ..> SKM
-
-CatalogoModule   ..> SKM
-
-AlertasModule    ..> NotificacionModule
-AlertasModule    ..> SKM
-
-EvaluacionModule ..> AlertasModule
-EvaluacionModule ..> SKM
-
-NotificacionModule ..> AlertasModule
-NotificacionModule ..> SKM
-
-note bottom of SKM
-  EventBus, Config, Logging,
-  TypeORM connection, Redis client
+note right of BUS
+  EventEmitter nativo
+  envuelto en TypedBus
+  sobre DomainEventMap
 end note
 
 @enduml

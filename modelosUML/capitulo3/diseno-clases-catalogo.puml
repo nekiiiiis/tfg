@@ -3,50 +3,101 @@ skinparam shadowing false
 skinparam classAttributeIconSize 0
 hide circle
 
-package "presentation/http/catalogo" {
-    class EntidadesController <<controller>>
-    class DireccionesController <<controller>>
-}
-
-package "application/catalogo" {
-    interface ICatalogoService <<port-in>>
-    interface ICatalogoQueryService <<port-in>> {
-        + resolverNombre(direccion)
-        + resolverToken(symbol)
-        + existeToken(symbol, mercado)
+package "presentación" {
+    class registerCatalogoRoutes <<gateway>> {
+        + POST /api/entidades
+        + GET /api/entidades
+        + PATCH /api/entidades/:id
+        + DELETE /api/entidades/:id
+        + POST /api/entidades/:id/direcciones
+        + GET /api/entidades/:id/direcciones
+        + DELETE /api/direcciones/:id
+        + POST /api/direcciones/resolver
     }
-    interface IEntidadesRepository <<port-out>>
-    interface IDireccionesRepository <<port-out>>
-    class CatalogoService <<service>>
-    class AddressNameResolver <<service>>
+    class registerDireccionDetalleRoutes <<gateway>> {
+        + GET /api/direcciones/:addr/spot
+        + GET /api/direcciones/:addr/perps
+        + GET /api/direcciones/:addr/staking
+        + GET /api/direcciones/:addr/fills
+    }
+    class registerMetaRoutes <<gateway>> {
+        + GET /api/meta/tokens
+        + GET /api/meta/perp-dexs
+        + GET /api/meta/refresh
+        + GET /api/meta/top-volumen
+        + GET /api/meta/candles
+    }
 }
 
-package "domain/catalogo" {
-    class Entidad <<entity>>
-    class Direccion <<value>>
+package "modules/catalogo" {
+    class CatalogoService <<service>> {
+        - db : DB
+        + crearEntidad(nombre)
+        + listarEntidades(filtro?)
+        + renombrarEntidad(id, nombre)
+        + eliminarEntidad(id)
+        + aniadirDireccion(entidadId, valor)
+        + listarDirecciones(entidadId)
+        + eliminarDireccion(id)
+        + resolverDirecciones(addrs[])
+    }
 }
 
-package "infrastructure/persistence/postgres" {
-    class EntidadesRepositoryTypeOrm <<repo>> #FFF3E0
-    class DireccionesRepositoryTypeOrm <<repo>> #FFF3E0
+package "modules/direccion-detalle" {
+    class AddressDetailService <<service>> {
+        - source : IHyperliquidSource
+        - meta : MetaService
+        + getSpot(address)
+        + getPerps(address)
+        + getStaking(address)
+        + getFills(address)
+    }
 }
 
-EntidadesController ..> ICatalogoService
-DireccionesController ..> ICatalogoService
-CatalogoService ..|> ICatalogoService
-CatalogoService ..|> ICatalogoQueryService
-CatalogoService ..> IEntidadesRepository
-CatalogoService ..> IDireccionesRepository
-AddressNameResolver ..> ICatalogoQueryService
-EntidadesRepositoryTypeOrm ..|> IEntidadesRepository
-DireccionesRepositoryTypeOrm ..|> IDireccionesRepository
-Entidad o-- Direccion
+package "modules/meta" {
+    class MetaService <<service>> {
+        + getCatalog()
+        + refresh()
+        + resolveToken(mercado, display)
+        + getMidsKeyToDisplay()
+    }
+}
 
-note right of ICatalogoQueryService
-  Interface segregada (ISP):
-  consumida por LeaderboardService
-  y AlertasService sin cargar la
-  parte de mutación de ICatalogoService
+package "domain" {
+    class Entidad <<entity>> {
+        + id : UUID
+        + nombre : string
+    }
+    class Direccion <<value>> {
+        + valor : "0x[a-f0-9]{40}"
+    }
+}
+
+package "persistence" {
+    class "tabla entidades" as TENT <<table>> #ECEFF1
+    class "tabla direcciones" as TDIR <<table>> #ECEFF1
+}
+
+package "sources" {
+    interface IHyperliquidSource <<port>>
+}
+
+registerCatalogoRoutes ..> CatalogoService
+registerDireccionDetalleRoutes ..> AddressDetailService
+registerMetaRoutes ..> MetaService
+CatalogoService ..> TENT
+CatalogoService ..> TDIR
+CatalogoService ..> Entidad
+CatalogoService ..> Direccion
+Entidad "1" o-- "*" Direccion
+AddressDetailService ..> IHyperliquidSource
+AddressDetailService ..> MetaService
+
+note right of AddressDetailService
+  Flujo alternativo de CU-07:
+  detalle global de una
+  dirección a partir de la L1.
+  Lectura pura, sin tocar la BD.
 end note
 
 @enduml

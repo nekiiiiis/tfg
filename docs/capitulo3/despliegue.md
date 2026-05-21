@@ -1,22 +1,19 @@
-# Diagrama de despliegue
+# Diseño del despliegue
 
-## Propósito
+Concreta la **vista física** del sistema: qué nodos ejecutan qué artefactos, cómo se comunican entre sí, qué dependencias externas resuelven y qué garantías ofrecen frente a los requisitos suplementarios.
 
-El diagrama de despliegue compromete las decisiones lógicas de los apartados anteriores con un **modelo físico** de nodos, contenedores, redes y volúmenes que el Capítulo 4 podrá materializar. El objetivo de esta sección es fijar el **esqueleto de despliegue** —qué se ejecuta dónde, cómo se comunican los procesos y dónde se persiste el estado—, no producir los ficheros de orquestación.
+## Topología
+
+El sistema se despliega como **dos contenedores** Docker orquestados con Docker Compose, comunicados por una red interna y expuestos al exterior por una única conexión TCP/HTTP del servicio de aplicación.
 
 <div align=center>
 
-|||
-|-|-|
-|**Punto de partida**|Vista física preliminar del [Diseño de la arquitectura](disenoArquitectura.md), restricciones de RS-03 (24/7) y RS-08 (sustituibilidad)|
-|**Resultado**|Diagrama UML de despliegue, asignación de subsistemas a contenedores, esquema de redes y volúmenes, política de salud y reinicios|
-|**Restricción**|Self-hosting sobre la infraestructura de Infinite Fieldx; un único nodo físico; la operación de despliegue debe ser reproducible *(los ficheros concretos de orquestación se entregan en el Capítulo 4)*|
+|Contenedor|Imagen|Función|
+|-|-|-|
+|`fieldx-app`|Build multi-stage local (`app/Dockerfile`)|Backend Fastify + SPA estático (servido desde `/public`)|
+|`fieldx-postgres`|`postgres:16-alpine`|Persistencia transaccional|
 
 </div>
-
-## Vista de despliegue
-
-El sistema se despliega como **cuatro contenedores** sobre un único nodo, comunicándose a través de dos redes virtuales y persistiendo en tres volúmenes.
 
 <div align=center>
 
@@ -24,125 +21,158 @@ El sistema se despliega como **cuatro contenedores** sobre un único nodo, comun
 
 </div>
 
-### Nodos y contenedores
+## Justificación de la topología
 
 <div align=center>
 
-|Contenedor|Tecnología base|Función|Subsistemas alojados|
-|-|-|-|-|
-|`backend`|Runtime Node.js + framework NestJS|Servidor REST + WebSocket + handlers de eventos del bus|S-PRES (HTTP+WS), S-INGE, S-LEAD, S-CATA, S-ALER, S-EVAL, S-NOTI|
-|`frontend`|Servidor estático (reverse proxy)|Sirve el bundle SPA y termina TLS, enrutando `/api/*` al `backend`|*(parte de S-PRES)*|
-|`postgres`|RDBMS PostgreSQL|Persistencia de catálogo, alertas y notificaciones|*(persistencia de S-CATA, S-ALER, S-NOTI)*|
-|`redis`|Almacén clave-valor en memoria con AOF|Estado caliente: leaderboard + cola de reintentos|*(estado de S-LEAD, S-NOTI)*|
-
-</div>
-
-### Procesos y comunicación
-
-<div align=center>
-
-|Origen|Destino|Protocolo|Naturaleza|
-|-|-|-|-|
-|Usuario *(navegador)*|`frontend`|HTTPS|Servir bundle estático|
-|Usuario *(navegador)*|`backend` *(vía proxy)*|HTTPS *(REST + WS upgrade)*|REST API + WebSocket reactivo (CU-01)|
-|`backend`|`postgres`|TCP/SQL|Consultas y mutaciones (CU-02..CU-12, CU-14)|
-|`backend`|`redis`|TCP/RESP|Operaciones sobre Sorted Set (CU-01) y List (RS-07)|
-|`backend`|Hyperliquid L1|WebSocket *(saliente)*|Suscripción a feeds de operaciones y precios|
-|`backend`|Servicio Webhook|HTTPS POST *(saliente)*|Transmisión de notificaciones (CU-14)|
-
-</div>
-
-> Solo el contenedor `frontend` se expone al exterior; `postgres` y `redis` quedan en una red interna y no son accesibles desde el host. El usuario percibe un único punto de entrada que termina TLS y enruta hacia los servicios internos.
-
-## Redes y volúmenes
-
-<div align=center>
-
-|Red|Conecta|Razón|
+|Decisión|Motivo|Requisito|
 |-|-|-|
-|*Red de borde*|`frontend` ↔ exterior|Red expuesta al host. Solo la usa el contenedor que termina TLS|
-|*Red interna*|`backend` ↔ `postgres` ↔ `redis` ↔ `frontend`|Red privada para tráfico interno. La persistencia y la caché no se exponen al host|
+|**Topología mínima de dos contenedores**|`app` concentra backend, gateway WS y SPA estático (`@fastify/static`); `postgres` aporta la única dependencia de infraestructura|RS-03 (mínima superficie operativa)|
+|**Postgres con healthcheck `pg_isready`**|El servicio `app` solo arranca cuando Postgres responde|RS-03|
+|**App con healthcheck HTTP `/health`**|Compose detiene/reinicia el contenedor si la salud falla 5 chequeos consecutivos|RS-03|
+|**SPA servido por el mismo proceso del backend**|Reduce un punto de fallo y la complejidad de configuración (CORS, certificados)|RS-05|
+|**Una sola red `internal` para tráfico interno**|`fieldx-internal` (bridge) une `app` y `postgres`; `fieldx-edge` (bridge) expone `app`|—|
+|**Estado caliente in-memory + cola virtual en `notificaciones`**|Cubre los casos de uso sin requerir servicios de infraestructura adicionales (cache distribuida, broker)|RS-03|
 
 </div>
 
+## Redes
+
 <div align=center>
 
-|Volumen|Contenedor|Función|RS|
+|Red|Tipo|Conecta|Acceso externo|
 |-|-|-|-|
-|`fieldx-postgres-data`|`postgres`|Persistencia ACID del catálogo, las alertas y las notificaciones|RS-03, RS-09|
-|`fieldx-redis-data`|`redis`|Persistencia AOF del Sorted Set del leaderboard y de la cola de reintentos|RS-03, RS-07|
-|`fieldx-backend-logs`|`backend`|Logs estructurados rotados|RS-03|
+|`fieldx-internal`|bridge|`app` ↔ `postgres`|No|
+|`fieldx-edge`|bridge|`app` (publicado al host en `:3001`)|Sí|
 
 </div>
 
-> La separación en dos redes y la externalización del estado a volúmenes son las dos decisiones que materializan el RS-03 (24/7): tras un reinicio del host, los contenedores recuperan su estado y la disponibilidad del sistema no depende del proceso `backend` para los datos persistentes.
+`postgres` no expone puertos al host en producción; en desarrollo se mapea `${POSTGRES_PORT:-5432}:5432` para inspección manual.
 
-## Política de salud y reinicios
+## Volúmenes
 
 <div align=center>
 
-|Aspecto|Decisión|RS|
+|Volumen|Servicio|Función|
 |-|-|-|
-|**Auto-reinicio**|Cada contenedor se relanza tras crash o reboot del host hasta intervención explícita del operador|RS-03|
-|**Sondas de salud**|Cada servicio expone una sonda que el orquestador consulta periódicamente. El `backend` no arranca antes de que `postgres` y `redis` estén `healthy`|RS-03|
-|**Endpoint de salud del `backend`**|Verifica conectividad con `postgres`, con `redis` y la última recepción del WS de Hyperliquid; pasa a *degraded* si Hyperliquid lleva más de un umbral configurado sin emitir|RS-03, RS-08|
-|**Reconexión a Hyperliquid**|`HyperliquidConnector` reintenta con backoff exponencial; el resto del sistema continúa con el último estado conocido|RS-03, RS-08|
+|`fieldx-postgres-data`|`postgres`|`/var/lib/postgresql/data`: datos persistentes de la base de datos|
 
 </div>
 
-## Configuración externa
+Los logs del proceso `app` se emiten a `stdout`/`stderr` y los recoge el runtime del Docker; no se necesita volumen propio. El SPA se copia dentro de la imagen, no requiere volumen.
 
-Todas las decisiones que pueden cambiar entre entornos (local, staging, Infinite Fieldx) se exponen como **variables de configuración externas al contenedor**. El esqueleto del diseño solo fija qué variables existen y qué función cumplen; los valores concretos los aporta cada despliegue.
+## Variables de entorno
+
+### Postgres
 
 <div align=center>
 
-|Variable|Naturaleza|Función|RS|
+|Variable|Valor por defecto|Función|
+|-|-|-|
+|`POSTGRES_DB`|`infinite_fieldx`|Nombre de la base|
+|`POSTGRES_USER`|`fieldx`|Usuario maestro|
+|`POSTGRES_PASSWORD`|`fieldx_dev_password_change_me`|Contraseña *(obligatorio sobrescribir en producción)*|
+|`POSTGRES_PORT`|`5432`|Puerto publicado al host (solo desarrollo)|
+
+</div>
+
+### App
+
+<div align=center>
+
+|Variable|Valor por defecto / requerido|Función|RS|
 |-|-|-|-|
-|`POSTGRES_PASSWORD`|Secreto|Conexión `backend` ↔ `postgres`|RS-10|
-|`APP_SECRET`|Secreto|Clave maestra para el cifrado simétrico de URLs de webhook (cf. [Modelo de datos](modeloDeDatos.md))|RS-10|
-|`HYPERLIQUID_WS_URL`|Configuración|Endpoint del feed de Hyperliquid — punto de sustituibilidad RS-08|RS-08|
-|`LOG_LEVEL`|Configuración|Verbosidad del logger|—|
+|`NODE_ENV`|`production`|Activa modo producción|—|
+|`HOST`|`0.0.0.0`|Interfaz de escucha|—|
+|`PORT`|`3001`|Puerto de escucha|—|
+|`LOG_LEVEL`|`info`|Nivel de log de `pino`|—|
+|`DATABASE_URL`|construida en compose|URL de conexión a Postgres|—|
+|`APP_SECRET`|**obligatoria**|Clave maestra para `pgp_sym_encrypt`/`pgp_sym_decrypt`|RS-10|
+|`HYPERLIQUID_SOURCE`|`public-ws`|Selección de adaptador (`public-ws` / `nanoreth`)|RS-08|
+|`HYPERLIQUID_WS_URL`|`wss://api.hyperliquid.xyz/ws`|Endpoint WebSocket público|—|
+|`HYPERLIQUID_INFO_URL`|`https://api.hyperliquid.xyz/info`|Endpoint REST público|—|
+|`NANORETH_RPC_URL`|`http://localhost:8545`|Endpoint del nodo no validador (adaptador esqueleto)|RS-08|
 
 </div>
 
-## Sustituibilidad de la frontera (RS-08)
+Las variables operativas adicionales (`LEADERBOARD_WINDOW_*_SECONDS`, `LEADERBOARD_PREWARM`, `NOTIFICATION_RETRY_*`, etc.) están documentadas en `src/.env.example` y permiten afinar el comportamiento sin reconstruir la imagen.
 
-La sustitución del proveedor de Hyperliquid (API pública ↔ nodo no validador) se realiza **sin modificar el código del núcleo**:
+## Construcción de la imagen `app`
+
+`app/Dockerfile` usa una build **multi-stage** con tres fases:
 
 <div align=center>
 
-|Elemento que cambia|Mecanismo|
+|Fase|Base|Producto|
+|-|-|-|
+|`web-build`|`node:20-alpine`|`/web/dist`: SPA Vite optimizado|
+|`app-build`|`node:20-alpine`|`/app/dist`: backend transpilado + `package-lock.json`|
+|`runtime`|`node:20-alpine`|Imagen final con `dist/`, `dist/persistence/migrations`, `public/` (SPA), dependencias de producción, usuario `node`|
+
+</div>
+
+Decisiones de la imagen final:
+
+- `node:20-alpine`: imagen pequeña (~50 MB) y LTS.
+- `apk add wget`: requerido por el `healthcheck` de Compose.
+- `USER node` (no-root) para reducir la superficie de ataque.
+- `npm install --omit=dev`: solo dependencias de producción.
+
+## Flujos de arranque y operación
+
+<div align=center>
+
+|Fase|Servicio|Acción|
+|-|-|-|
+|Pre-arranque|`postgres`|Compose espera a `pg_isready`|
+|Arranque|`app`|`node dist/server.js`. Lectura de `config.ts`, carga de `pgcrypto` y ejecución de migraciones (si el flag operativo lo indica), instanciación de servicios, registro de gateways, suscripción al WS de Hyperliquid|
+|Estable|`app`|Procesa peticiones HTTP/WS, mantiene canales abiertos hacia HL, persiste trades en batches, ejecuta el retry worker|
+|Apagado|`app`|Cierre limpio de WS hacia HL, flush de buffers de `TradePersistence`, cierre del pool Postgres|
+
+</div>
+
+## Healthchecks
+
+<div align=center>
+
+|Servicio|Endpoint|Frecuencia|Acción Compose|
+|-|-|-|-|
+|`postgres`|`pg_isready -U $USER -d $DB`|cada 5 s|Marca *unhealthy* tras 10 fallos|
+|`app`|`GET /health`|cada 10 s, tras 20 s de gracia|Marca *unhealthy* tras 5 fallos|
+
+</div>
+
+El endpoint `/health` (`app/src/shared/health.ts`) verifica dos puntos: conectividad a Postgres y frescura del flujo de Hyperliquid (último trade < umbral configurable). Cumple **RS-03** porque cualquier degradación se manifiesta como *unhealthy* y dispara el reinicio automático del contenedor.
+
+## Dimensionamiento orientativo
+
+Para una operación 24/7 con prewarm de 9 pares (3 por mercado) y carga de usuarios típica del entorno académico, el dimensionamiento estimado es:
+
+<div align=center>
+
+|Recurso|`app`|`postgres`|
+|-|-|-|
+|vCPU|1–2|0,5–1|
+|RAM|512 MB – 1 GB|512 MB – 1 GB|
+|Disco|—|10–30 GB (incluye retención de 8 días de `lb_trades`)|
+|Red|≤ 5 Mbps de pico|—|
+
+</div>
+
+La cifra dominante en disco es `lb_trades`: con 9 pares activos y un trade medio de ~50 bytes serializados más índices, ~200–500 MB/día son razonables; la retención de 8 días encaja en 5 GB con holgura.
+
+## Cumplimiento de requisitos suplementarios
+
+<div align=center>
+
+|Requisito|Cómo lo cubre el despliegue|
 |-|-|
-|Endpoint del feed|Variable de configuración (`HYPERLIQUID_WS_URL`)|
-|Protocolo del feed *(si difiere)*|Una segunda implementación de `IHyperliquidPort` se inyecta en `IngestionModule`. La capa de aplicación y el dominio no cambian|
-
-</div>
-
-> El núcleo del sistema permanece intacto: el adaptador es el único componente que conoce el protocolo concreto. Esta es la materialización física del puerto identificado en el [Diseño de la arquitectura](disenoArquitectura.md).
-
-## Validación del despliegue
-
-<div align=center>
-
-|Criterio|Comprobación|
-|-|-|
-|**Disponibilidad 24/7 (RS-03)**|Auto-reinicio + sondas de salud + estado persistente en volúmenes|
-|**Sustituibilidad (RS-08)**|El proveedor Hyperliquid es una variable de configuración + un punto de inyección de adapter|
-|**Confidencialidad (RS-10)**|Webhook cifrado en BD; secretos solo en el entorno del contenedor, nunca en el repositorio|
-|**Reproducibilidad**|Un único nodo, contenedores estándar y configuración externalizada permiten levantar el sistema con un único comando de orquestación|
-|**Escalabilidad limitada al alcance**|Un único nodo es suficiente para la fase de Elaboración. La descomposición lógica en módulos NestJS deja preparada una eventual descomposición en microservicios cuando algún RS lo exija|
-
-</div>
-
-## Trazabilidad
-
-<div align=center>
-
-|De|A|Mecanismo|
-|-|-|-|
-|[Diseño de la arquitectura](disenoArquitectura.md)|Esta especificación|Cada subsistema lógico se mapea a un proceso/contenedor|
-|[Modelo de datos](modeloDeDatos.md)|Volúmenes `postgres` y `redis`|Persistencia de las tablas y estructuras descritas|
-|RS-03, RS-08, RS-10|Auto-reinicio, sondas, configuración externalizada, cifrado|Cada decisión cita el RS|
-|Capítulo 4|Ficheros de orquestación (`Dockerfile`, `docker-compose.yml`), scripts y procedimientos de despliegue|La implementación concreta del despliegue —el qué, el cómo y el cuándo de cada comando— se entrega en el Capítulo 4|
+|**RS-01** ≤ 1 s en leaderboard|App y Postgres en la misma red interna; estado caliente in-memory|
+|**RS-02** ≤ 2 s en evaluación|Misma red; índice `alertas_token_estado` cargado en RAM de Postgres|
+|**RS-03** 24/7|`restart: unless-stopped`, healthchecks, dos contenedores, retención automática de trades|
+|**RS-05** Áreas independientes|SPA servido desde el mismo origen que el API; sin saltos de origen|
+|**RS-07** Reintentos|El proceso del worker corre dentro del contenedor `app`; sus reinicios mantienen la cola virtual en Postgres|
+|**RS-08** Sustituibilidad de la fuente|`HYPERLIQUID_SOURCE` configura el adaptador en arranque|
+|**RS-10** Seguridad del webhook|`APP_SECRET` se inyecta por variable de entorno, nunca queda en imágenes ni en BD|
 
 </div>

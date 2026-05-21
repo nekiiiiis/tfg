@@ -16,7 +16,9 @@ entity "direcciones" as DIR {
     --
     *valor : CHAR(42) <<U>>
     *entidad_id : UUID <<FK>>
-    *añadida_en : TIMESTAMPTZ
+    *aniadida_en : TIMESTAMPTZ
+    --
+    idx (entidad_id)
 }
 
 entity "alertas" as ALER {
@@ -29,11 +31,10 @@ entity "alertas" as ALER {
     *webhook_url_enc : BYTEA
     *estado : estado_alerta
     *creada_en : TIMESTAMPTZ
-    ultima_disparo : TIMESTAMPTZ
+    ultimo_disparo : TIMESTAMPTZ
     ultimo_intento : TIMESTAMPTZ
     --
     idx (token_simbolo, estado)
-    idx (estado) WHERE estado <> 'OPERATIVA'
 }
 
 entity "notificaciones" as NOTI {
@@ -43,33 +44,52 @@ entity "notificaciones" as NOTI {
     *precio_disparador : NUMERIC(28,8)
     *instante_emision : TIMESTAMPTZ
     *estado : estado_entrega
-    *intento : SMALLINT
+    *intento : INTEGER
+    *proximo_intento : TIMESTAMPTZ
     ultimo_error : TEXT
     entregada_en : TIMESTAMPTZ
     --
-    idx (alerta_id, instante_emision DESC)
-    idx (estado) WHERE estado = 'PENDIENTE'
+    idx (alerta_id, instante_emision)
+    idx (estado, proximo_intento)
 }
 
-entity "eventos_auditoria" as AUD {
-    *id : BIGSERIAL <<PK>>
+entity "lb_trades" as LBT {
+    *tid : TEXT <<PK>>
     --
-    *nombre : VARCHAR(64)
-    *payload : JSONB
-    *ocurrido_en : TIMESTAMPTZ
+    *mercado : VARCHAR(16)
+    *token : VARCHAR(64)
+    *direccion : CHAR(42)
+    *lado : VARCHAR(4)
+    *volumen_usd : DOUBLE
+    *ts : DOUBLE
+    --
+    idx (mercado, token, ts)
+    idx (ts)
 }
 
-ENT ||--o{ DIR  : "1 entidad : N direcciones\nON DELETE CASCADE"
+ENT ||--o{ DIR   : "1 entidad : N direcciones\nON DELETE CASCADE"
 ALER ||--o{ NOTI : "1 alerta : N notificaciones\nON DELETE CASCADE"
 
 note right of ALER
   webhook_url_enc cifrado con
-  pgp_sym_encrypt (RS-10)
+  pgp_sym_encrypt / pgp_sym_decrypt
+  (RS-10).
 end note
 
-note bottom of AUD
-  Preparado para RS-04;
-  no usado en el alcance
+note right of NOTI
+  proximo_intento + idx
+  materializan la cola virtual
+  de reintentos (RS-07).
+end note
+
+note right of LBT
+  Tabla técnica derivada:
+  histórico continuo de trades
+  para snapshots de ventanas
+  largas (1d, 1w) y recuperación
+  tras reinicio.
+  PK = tid: dedupe natural
+  entre WS y REST.
 end note
 
 @enduml

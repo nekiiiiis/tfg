@@ -1,239 +1,294 @@
 # Análisis de los casos de uso
 
-## Propósito
+Por cada caso de uso del catálogo se construye una **realización de análisis** que identifica los objetos participantes, sus responsabilidades y la colaboración entre ellos. Siguiendo la priorización ya establecida, se desarrollan en detalle los cuatro CdU que concentran el riesgo técnico (CU-01, CU-09, CU-13, CU-14) y se documenta un **patrón común** para los once CdU CRUD homogéneos.
 
-El análisis de los CdU traduce cada flujo escrito en el Capítulo 2 en una **colaboración entre clases de análisis** que lo realiza, identificando qué clase recibe la solicitud del actor, qué clase coordina la realización y qué clases del dominio participan. La colaboración resultante es **agnóstica de tecnología**: no menciona frameworks, bases de datos ni protocolos concretos, y permite verificar que los subsistemas identificados en el [Análisis de la arquitectura](analisisArquitectura.md) son suficientes para soportar cada CdU.
+## Convenciones
+
+Se usa la notación de Jacobson, con tres estereotipos de clase de análisis:
 
 <div align=center>
 
-|||
-|-|-|
-|**Punto de partida**|CdU detallados, modelo del dominio, subsistemas identificados|
-|**Resultado**|Una **realización de análisis** `R(CU-XX)` por cada CdU detallado: el conjunto de clases que colaboran y la secuencia o el diagrama de comunicación que describe cómo lo hacen|
+|Estereotipo|Rol|Identificación|
+|-|-|-|
+|`<<boundary>>`|Frontera del sistema|Una por actor humano (primaria), una por entidad expuesta al usuario (primitiva) y una por actor-sistema externo (central)|
+|`<<control>>`|Coordinación|Una por caso de uso, encapsula su escenario|
+|`<<entity>>`|Concepto del dominio|Trazado directamente desde el modelo del dominio|
 
 </div>
 
-## Notación
+Los participantes no son clases de programación: son **roles** que en el [diseño de clases](disenoClases.md) se refinan a artefactos concretos.
 
-Se sigue la notación de Jacobson para clases de análisis:
+## Catálogo de participantes
+
+Las clases identificadas y su trazabilidad con la captura de casos de uso y el modelo del dominio:
+
+### Clases `<<boundary>>` (frontera)
 
 <div align=center>
 
-|Estereotipo|Significado|Icono|Subsistemas en los que aparecen|
+|Clase|Tipo|Origen|Subsistema|
 |-|-|-|-|
-|`<<boundary>>`|Comunica con un actor — adapta el lenguaje del actor al del sistema y viceversa|Círculo con T a la izquierda|S-PRES, S-INGE, S-NOTI|
-|`<<control>>`|Coordina la realización de un CdU — encapsula la lógica del flujo|Círculo con flecha|S-LEAD, S-CATA, S-ALER, S-EVAL, S-NOTI|
-|`<<entity>>`|Información del dominio — representa conceptos del modelo del dominio|Círculo con línea inferior|Compartidas entre los subsistemas del núcleo|
+|`VistaLeaderboard`|Primaria|Prototipo P1 + Usuario (actor)|S-PRES|
+|`VistaEntidades`|Primaria|Prototipos P2, P3, P4 + Usuario|S-PRES|
+|`VistaAlertas`|Primaria|Prototipos P5, P6 + Usuario|S-PRES|
+|`ConectorHyperliquid`|Central|Actor Hyperliquid L1|S-INGE|
+|`ConectorWebhook`|Central|Actor Servicio Webhook|S-NOTI|
 
 </div>
 
-> Las clases de control siguen el patrón **"un control por CdU"** establecido en la guía de la disciplina: cada CdU detallado tiene su propio `<<control>>`, lo que garantiza la trazabilidad entre el modelo de CdU y el modelo de clases.
-
-## Catálogo de clases de análisis participantes
+### Clases `<<control>>` (controladores de CdU)
 
 <div align=center>
 
-|Clase|Estereotipo|Subsistema|Origen|
+|Clase|CdU que coordina|Subsistema|
+|-|-|-|
+|`GestorConsultaLeaderboard`|CU-01|S-LEAD|
+|`GestorCatalogoEntidades`|CU-02, CU-03, CU-04, CU-05, CU-06, CU-07, CU-08|S-CATA|
+|`GestorAlertasPrecio`|CU-09, CU-10, CU-11, CU-12|S-ALER|
+|`GestorEvaluacionAlertas`|CU-13|S-EVAL|
+|`GestorEnvioNotificacion`|CU-14|S-NOTI|
+
+</div>
+
+### Clases `<<entity>>` (dominio)
+
+Refinadas directamente del modelo del dominio:
+
+<div align=center>
+
+|Clase|Propiedades esenciales|Invariantes/Estados|
+|-|-|-|
+|`Entidad`|`id`, `nombre`|Nombre único|
+|`Direccion`|`valor`, `entidad`|Formato `0x[a-f0-9]{40}`; única|
+|`AlertaPrecio`|`mercado`, `token`, `umbral`, `webhook`, `estado`|Estados: OPERATIVA → DISPARADA → OPERATIVA / NOTIFICACION_FALLIDA|
+|`Notificacion`|`alerta`, `precioDisparador`, `instanteEmision`, `estado`|Estados: PENDIENTE → ENTREGADA / FALLIDA|
+|`Operacion`|`mercado`, `token`, `direccion`, `volumenUsd`, `lado`, `instante`|`volumenUsd > 0`|
+|`Precio`|`token`, `valor`, `instante`|`valor > 0`|
+|`LeaderboardEnVivo`|`mercado`, `token`, `temporalidad`, agregados por dirección|Derivada del flujo de `Operacion`; sin persistencia transaccional|
+
+</div>
+
+> `LeaderboardEnVivo` es una **entidad derivada** propia del análisis: representa el estado agregado por terna. No proviene del modelo del dominio porque allí se modelaron únicamente conceptos de negocio; la agregación es una abstracción introducida aquí, en el análisis, para razonar sobre el flujo continuo desde la L1.
+
+### Diagrama global
+
+<div align=center>
+
+![Clases de análisis — visión global](../../imagenes/capitulo3/analisis-clases-global.svg)
+
+</div>
+
+---
+
+## Realización de CU-01 — Consultar leaderboard
+
+### Participantes
+
+<div align=center>
+
+|Rol|Clase|
+|-|-|
+|Actor humano|Usuario|
+|Actor externo|Hyperliquid L1|
+|Frontera|`VistaLeaderboard`, `ConectorHyperliquid`|
+|Controlador|`GestorConsultaLeaderboard`, `GestorCatalogoEntidades` *(consulta)*|
+|Entidades|`LeaderboardEnVivo`, `Operacion`, `Entidad`, `Direccion`|
+
+</div>
+
+### Colaboración
+
+1. El **Usuario** interactúa con `VistaLeaderboard` y selecciona mercado, token y temporalidad.
+2. `VistaLeaderboard` solicita a `GestorConsultaLeaderboard` la suscripción a esa terna.
+3. `GestorConsultaLeaderboard` solicita a `ConectorHyperliquid` el flujo continuo de operaciones para el token seleccionado, si aún no estuviera abierto.
+4. **Hyperliquid L1** envía `Operacion` por ese canal. `ConectorHyperliquid` las publica como eventos `OperacionRecibida` en el bus del dominio.
+5. `GestorConsultaLeaderboard`, suscrito a `OperacionRecibida`, agrega cada operación en `LeaderboardEnVivo` según `mercado`, `token`, `temporalidad` y `lado`, respetando la ventana deslizante asociada a la temporalidad.
+6. Para las direcciones presentes, `GestorConsultaLeaderboard` (o la propia `VistaLeaderboard`, según se decida en diseño) consulta `GestorCatalogoEntidades` para resolver nombres de entidades conocidas.
+7. `VistaLeaderboard` recibe el snapshot inicial y, a continuación, las actualizaciones incrementales mientras la suscripción esté activa.
+
+### Diagrama
+
+<div align=center>
+
+![Realización R(CU-01)](../../imagenes/capitulo3/analisis-R-CU-01.svg)
+
+</div>
+
+### Notas de análisis
+
+- La actualización del leaderboard es **reactiva**: el controlador no consulta a la L1, se suscribe. Esto materializa el mecanismo de propagación de eventos identificado en el [análisis de la arquitectura](analisisArquitectura.md).
+- `LeaderboardEnVivo` es un concepto derivado del flujo: si el proceso se reinicia, se reconstruye replicando el flujo (RS-03). Esto se discute en detalle en el [diseño de clases](disenoClases.md).
+- La resolución de nombres es una colaboración entre subsistemas (S-LEAD ↔ S-CATA) sobre una operación de consulta pura: no muta estado.
+
+---
+
+## Realización de CU-09 — Crear alerta de precio
+
+### Participantes
+
+<div align=center>
+
+|Rol|Clase|
+|-|-|
+|Actor humano|Usuario|
+|Actor externo|Servicio Webhook|
+|Frontera|`VistaAlertas`, `ConectorWebhook`|
+|Controlador|`GestorAlertasPrecio`|
+|Entidades|`AlertaPrecio`, `Webhook`, `Umbral`|
+
+</div>
+
+### Colaboración
+
+1. El **Usuario** interactúa con `VistaAlertas` e introduce mercado, token, umbral (`SUBE`/`BAJA`, valor) y dirección del webhook.
+2. `VistaAlertas` solicita a `GestorAlertasPrecio` el registro de la alerta.
+3. `GestorAlertasPrecio` valida la coherencia de los datos (formato del umbral, formato del webhook).
+4. `GestorAlertasPrecio` pide a `ConectorWebhook` que verifique la alcanzabilidad del webhook destino. La respuesta no bloquea el registro; un webhook inalcanzable se persiste como aviso al Usuario.
+5. `GestorAlertasPrecio` crea una instancia de `AlertaPrecio` en estado `OPERATIVA`, custodiando la URL del webhook con la garantía de no legibilidad externa (RS-10).
+6. `VistaAlertas` confirma el registro al Usuario.
+
+### Diagrama
+
+<div align=center>
+
+![Realización R(CU-09)](../../imagenes/capitulo3/analisis-R-CU-09.svg)
+
+</div>
+
+### Notas de análisis
+
+- La operación es **transaccional**: el alta queda registrada con todas sus invariantes o no se registra. Esto se concreta como persistencia ACID en el diseño.
+- La verificación del webhook es una operación auxiliar — RS-07 garantiza que un webhook que falle al disparar la alerta podrá reintentarse, así que su verificación previa no es un punto de fallo absoluto.
+
+---
+
+## Realización de CU-13 — Evaluar alertas activas
+
+### Participantes
+
+<div align=center>
+
+|Rol|Clase|
+|-|-|
+|Actor externo|Hyperliquid L1|
+|Frontera|`ConectorHyperliquid`|
+|Controlador|`GestorEvaluacionAlertas`, `GestorAlertasPrecio` *(consulta)*, `GestorEnvioNotificacion` *(`<<include>>`)*|
+|Entidades|`Precio`, `AlertaPrecio`, `Umbral`|
+
+</div>
+
+### Colaboración
+
+1. **Hyperliquid L1** envía una actualización de precio a `ConectorHyperliquid`.
+2. `ConectorHyperliquid` publica `PrecioActualizado` en el bus del dominio.
+3. `GestorEvaluacionAlertas`, suscrito a `PrecioActualizado`, consulta a `GestorAlertasPrecio` las alertas `OPERATIVA` para ese token.
+4. Para cada alerta, comprueba si el `Precio` cumple el `Umbral` definido. Si lo cumple:
+   - Marca la alerta como `DISPARADA`.
+   - Solicita a `GestorEnvioNotificacion` la realización de CU-14 (relación `<<include>>` ya identificada en la captura de casos de uso).
+
+### Diagrama
+
+<div align=center>
+
+![Realización R(CU-13)](../../imagenes/capitulo3/analisis-R-CU-13.svg)
+
+</div>
+
+### Notas de análisis
+
+- La consulta a `GestorAlertasPrecio` debe estar indexada por `token` y `estado` para cumplir RS-02 (≤ 2 segundos por evaluación).
+- Si la evaluación de una alerta falla (problema técnico al consultar o al actualizar), el sistema lo reintenta en la siguiente actualización de precio: el flujo continuo de la L1 lo permite sin políticas de reintento explícitas para este CdU.
+
+---
+
+## Realización de CU-14 — Enviar notificación
+
+### Participantes
+
+<div align=center>
+
+|Rol|Clase|
+|-|-|
+|Actor externo|Servicio Webhook|
+|Frontera|`ConectorWebhook`|
+|Controlador|`GestorEnvioNotificacion`|
+|Entidades|`AlertaPrecio`, `Notificacion`, `Webhook`, `Precio`|
+
+</div>
+
+### Colaboración
+
+1. `GestorEvaluacionAlertas` invoca a `GestorEnvioNotificacion` con la alerta disparada y el precio que la disparó.
+2. `GestorEnvioNotificacion` crea una `Notificacion` en estado `PENDIENTE` asociada a la alerta y al precio.
+3. `GestorEnvioNotificacion` solicita a `ConectorWebhook` la transmisión del aviso al destino registrado en la alerta.
+4. Si el Servicio Webhook confirma la recepción, `GestorEnvioNotificacion` marca la `Notificacion` como `ENTREGADA` y rearma la alerta a `OPERATIVA`.
+5. Si la transmisión falla o no se confirma, marca la `Notificacion` como pendiente de reintento, programa el siguiente intento según la política de backoff y deja la alerta en `NOTIFICACION_FALLIDA` hasta que la entrega prospere.
+
+### Diagrama
+
+<div align=center>
+
+![Realización R(CU-14)](../../imagenes/capitulo3/analisis-R-CU-14.svg)
+
+</div>
+
+### Notas de análisis
+
+- La política de reintentos (RS-07) es una característica del subsistema S-NOTI, no del receptor: el Servicio Webhook puede ser puntualmente inalcanzable sin afectar al resto del sistema.
+- La trazabilidad (RS-09) se materializa al guardar cada `Notificacion` con referencia a la alerta y al precio: cualquier entrega es auditable.
+
+---
+
+## Patrón CRUD para CU-02..CU-08 y CU-10..CU-12
+
+Los once CdU restantes comparten estructura: el Usuario solicita una operación sobre una entidad a través de su vista; el controlador del subsistema correspondiente valida y persiste; el sistema confirma. Se documentan agrupados para evitar duplicación.
+
+### Plantilla de participantes
+
+<div align=center>
+
+|Rol|Clase|Sustitución por CdU|
+|-|-|-|
+|Actor|Usuario|—|
+|Frontera|`Vista<Concepto>`|`VistaEntidades` (CU-02..05, CU-07), `VistaAlertas` (CU-10..12), embebida en `VistaEntidades` (CU-06, CU-08)|
+|Controlador|`Gestor<Concepto>`|`GestorCatalogoEntidades` (CU-02..08), `GestorAlertasPrecio` (CU-10..12)|
+|Entidad|`Entidad`, `Direccion` o `AlertaPrecio`|según el CdU|
+
+</div>
+
+### Colaboración genérica
+
+1. El Usuario solicita la operación desde la vista.
+2. La vista delega en el gestor con los datos introducidos.
+3. El gestor valida invariantes (unicidad, formato, existencia) y, en operaciones de baja, solicita confirmación.
+4. El gestor persiste la mutación o devuelve la consulta.
+5. La vista presenta confirmación o el resultado al Usuario.
+
+### Tabla de cobertura
+
+<div align=center>
+
+|CdU|Vista|Gestor|Mutación|
 |-|-|-|-|
-|`VistaLeaderboard`|`<<boundary>>`|S-PRES|Vista para el actor *Usuario* — primaria, soporta CU-01|
-|`VistaEntidades`|`<<boundary>>`|S-PRES|Vista para el actor *Usuario* — primaria, soporta CU-02 a CU-08|
-|`VistaAlertas`|`<<boundary>>`|S-PRES|Vista para el actor *Usuario* — primaria, soporta CU-09 a CU-12|
-|`ConectorHyperliquid`|`<<boundary>>`|S-INGE|Vista de comunicaciones para el actor *Hyperliquid L1*|
-|`ConectorWebhook`|`<<boundary>>`|S-NOTI|Vista de comunicaciones para el actor *Servicio Webhook*|
-|`GestorConsultaLeaderboard`|`<<control>>`|S-LEAD|Control de CU-01|
-|`GestorCatalogoEntidades`|`<<control>>`|S-CATA|Control de CU-02 a CU-08 *(detalle tabular al final)*|
-|`GestorAlertasPrecio`|`<<control>>`|S-ALER|Control de CU-09 a CU-12|
-|`GestorEvaluacionAlertas`|`<<control>>`|S-EVAL|Control de CU-13|
-|`GestorEnvioNotificacion`|`<<control>>`|S-NOTI|Control de CU-14|
-|`Mercado`, `Token`, `Precio`, `Operacion`, `Direccion`, `Entidad`, `AlertaPrecio`, `Webhook`, `Notificacion`|`<<entity>>`|Compartidas|Modelo del dominio del [Capítulo 2](../capitulo2/modeloDelDominio.md)|
+|**CU-02** Crear entidad|`VistaEntidades`|`GestorCatalogoEntidades`|Inserción de `Entidad` (nombre único)|
+|**CU-03** Abrir entidades|`VistaEntidades`|`GestorCatalogoEntidades`|Consulta sin mutación|
+|**CU-04** Editar entidad|`VistaEntidades`|`GestorCatalogoEntidades`|Actualización de `Entidad.nombre`|
+|**CU-05** Eliminar entidad|`VistaEntidades`|`GestorCatalogoEntidades`|Baja de `Entidad` y vínculos|
+|**CU-06** Añadir dirección|`VistaEntidades`|`GestorCatalogoEntidades`|Inserción de `Direccion`|
+|**CU-07** Abrir direcciones|`VistaEntidades`|`GestorCatalogoEntidades`|Consulta sin mutación *(con flujo alternativo "detalle global" que delega en `ConectorHyperliquid`)*|
+|**CU-08** Eliminar dirección|`VistaEntidades`|`GestorCatalogoEntidades`|Baja del vínculo de `Direccion`|
+|**CU-10** Abrir alertas|`VistaAlertas`|`GestorAlertasPrecio`|Consulta sin mutación|
+|**CU-11** Editar alerta|`VistaAlertas`|`GestorAlertasPrecio`|Actualización de `AlertaPrecio`|
+|**CU-12** Eliminar alerta|`VistaAlertas`|`GestorAlertasPrecio`|Baja de `AlertaPrecio`|
 
 </div>
 
-> En el [Análisis de clases](analisisClases.md) se documenta cada una de estas clases con sus responsabilidades, atributos y operaciones tentativas. Aquí se utilizan únicamente para describir cómo colaboran al realizar cada CdU.
-
----
-
-## Realización R(CU-01) — Consultar leaderboard
-
-### Clases participantes
+### Diagrama parametrizado
 
 <div align=center>
 
-|Rol|Clase|Responsabilidad en la realización|
-|-|-|-|
-|Boundary primaria|`VistaLeaderboard`|Captura los parámetros (mercado, token, temporalidad) y presenta la clasificación al Usuario, actualizándola al recibir nuevos eventos|
-|Boundary central|`ConectorHyperliquid`|Mantiene la suscripción al flujo de operaciones del token solicitado y publica el evento `OperacionRecibida`|
-|Control|`GestorConsultaLeaderboard`|Recibe la solicitud, suscribe al flujo, agrega volúmenes por dirección y resuelve nombres consultando al catálogo|
-|Entities|`Token`, `Mercado`, `Operacion`, `Direccion`, `Entidad`|Aportan el dato del dominio que se agrega y se resuelve|
+![Realización CRUD parametrizada](../../imagenes/capitulo3/analisis-R-CRUD.svg)
 
 </div>
 
-### Colaboración
-
-<div align=center>
-
-![Realización de análisis CU-01](../../imagenes/capitulo3/analisis-R-CU-01.svg)
-
-</div>
-
-### Notas de análisis
-
-<div align=center>
-
-|||
-|-|-|
-|**Acumulador conceptual**|La clasificación es una **vista derivada** del flujo de `Operacion` agregadas por `Direccion`. En análisis no se prescribe estructura concreta de almacenamiento; el [Diseño de clases](disenoClases.md) introducirá una clase `LeaderboardEnVivo` que materializa la agregación|
-|**Flujo continuo**|`ConectorHyperliquid` no entrega un único resultado: publica eventos a medida que llegan operaciones. La realización describe lo que ocurre en cada evento|
-|**Reactividad**|`GestorConsultaLeaderboard` se suscribe al evento `OperacionRecibida` filtrado por token al iniciarse la consulta y se desuscribe cuando el Usuario cambia de selección o abandona la vista|
-|**Resolución de nombres**|`GestorConsultaLeaderboard` consulta a `GestorCatalogoEntidades` (subsistema S-CATA) cuando recibe nuevas direcciones aún no resueltas|
-
-</div>
-
----
-
-## Realización R(CU-09) — Crear alerta de precio
-
-### Clases participantes
-
-<div align=center>
-
-|Rol|Clase|Responsabilidad en la realización|
-|-|-|-|
-|Boundary primaria|`VistaAlertas`|Captura los parámetros (mercado, token, umbral, dirección del webhook) y presenta confirmación o errores|
-|Boundary central|`ConectorWebhook`|Realiza la comprobación de alcanzabilidad del webhook indicado por el Usuario|
-|Control|`GestorAlertasPrecio`|Valida los parámetros, registra la alerta como operativa, inyecta el webhook como entidad asociada|
-|Entities|`AlertaPrecio`, `Token`, `Webhook`|Constituyen el resultado persistente de la realización|
-
-</div>
-
-### Colaboración
-
-<div align=center>
-
-![Realización de análisis CU-09](../../imagenes/capitulo3/analisis-R-CU-09.svg)
-
-</div>
-
-### Notas de análisis
-
-<div align=center>
-
-|||
-|-|-|
-|**Validación en dos niveles**|`VistaAlertas` valida formato local; `GestorAlertasPrecio` valida reglas de negocio (token existente, umbral coherente)|
-|**Alcanzabilidad del webhook**|`ConectorWebhook` realiza una comprobación tentativa (CU-09 paso 6); su resultado es **informativo**, no bloqueante (CU-09 *6b*: el Usuario puede confirmar pese al aviso)|
-|**Estado inicial**|La alerta se registra en estado `OPERATIVA` (cf. *Diagrama de estados de AlertaPrecio* del Capítulo 2)|
-
-</div>
-
----
-
-## Realización R(CU-13) — Evaluar alertas activas
-
-### Clases participantes
-
-<div align=center>
-
-|Rol|Clase|Responsabilidad en la realización|
-|-|-|-|
-|Boundary central|`ConectorHyperliquid`|Publica el evento `PrecioActualizado` con el token y el nuevo precio|
-|Control principal|`GestorEvaluacionAlertas`|Reacciona al evento, recupera las alertas operativas del token, evalúa cada condición, marca como disparadas las que cumplen y solicita el envío|
-|Control incluido|`GestorEnvioNotificacion`|Realiza CU-14 por cada alerta disparada *(`<<include>>`)*|
-|Entities|`Precio`, `Token`, `AlertaPrecio`|Aportan el dato evaluado y el conjunto a comprobar|
-
-</div>
-
-### Colaboración
-
-<div align=center>
-
-![Realización de análisis CU-13](../../imagenes/capitulo3/analisis-R-CU-13.svg)
-
-</div>
-
-### Notas de análisis
-
-<div align=center>
-
-|||
-|-|-|
-|**Disparo por evento**|`GestorEvaluacionAlertas` no es invocado por el Usuario: reacciona al evento `PrecioActualizado` publicado por `ConectorHyperliquid`. Esto materializa el **mecanismo de notificación de eventos del dominio** identificado en el análisis de la arquitectura|
-|**Filtrado eficiente**|La consulta de alertas se hace ya filtrada por token, evitando recorrer alertas irrelevantes (RS-02)|
-|**Atomicidad por alerta**|Cada alerta se procesa de forma independiente: el fallo en una no impide la evaluación de las demás (CU-13 alternativa *3a*)|
-|**Idempotencia**|Una alerta marcada como `DISPARADA` no se vuelve a evaluar hasta que CU-14 la rearma o un fallo de notificación la deja en `NOTIFICACION_FALLIDA`|
-
-</div>
-
----
-
-## Realización R(CU-14) — Enviar notificación
-
-### Clases participantes
-
-<div align=center>
-
-|Rol|Clase|Responsabilidad en la realización|
-|-|-|-|
-|Boundary central|`ConectorWebhook`|Construye y transmite la petición al webhook receptor; recibe la confirmación o el error|
-|Control|`GestorEnvioNotificacion`|Compone la `Notificacion` con los datos de la alerta y el precio disparador, registra el resultado y rearma la alerta|
-|Entities|`AlertaPrecio`, `Webhook`, `Notificacion`|Notificación persistida con trazabilidad al disparo (RS-09); webhook tratado como dato confidencial (RS-10)|
-
-</div>
-
-### Colaboración
-
-<div align=center>
-
-![Realización de análisis CU-14](../../imagenes/capitulo3/analisis-R-CU-14.svg)
-
-</div>
-
-### Notas de análisis
-
-<div align=center>
-
-|||
-|-|-|
-|**Rearme tras éxito**|Tras la confirmación del Servicio Webhook, la alerta vuelve a estado `OPERATIVA` para volver a evaluarse en futuras actualizaciones de precio|
-|**Reintento tras fallo**|Si `ConectorWebhook` no recibe confirmación, `GestorEnvioNotificacion` deja la alerta en `NOTIFICACION_FALLIDA` y programa un reintento diferido (RS-07). Esta variante materializa el `<<extend>>` *reintentoNotificación* identificado en la [Estructuración de los CdU](../capitulo2/estructuraCdU.md)|
-|**Trazabilidad**|`Notificacion` queda persistida con referencia a la `AlertaPrecio` y al `Precio` que la disparó (RS-09). El contenido del webhook se almacena de forma confidencial (RS-10)|
-
-</div>
-
----
-
-## CdU restantes — derivación por simetría
-
-Los CdU CU-02 a CU-08 (gestión de entidades y direcciones) y CU-10 a CU-12 (gestión de alertas) comparten una estructura común: el Usuario actúa sobre la `VistaEntidades` o la `VistaAlertas`, el `<<control>>` correspondiente valida y persiste, y la entidad del dominio queda creada, modificada o eliminada. Documentarlos con un diagrama propio cada uno aportaría redundancia sin información nueva.
-
-<div align=center>
-
-|Patrón|CdU que lo siguen|Boundary|Control|Entities|
-|-|-|-|-|-|
-|**Crear** entidad del dominio|CU-02, CU-06, CU-09|`VistaEntidades` / `VistaAlertas`|`GestorCatalogoEntidades` / `GestorAlertasPrecio`|`Entidad` / `Direccion` / `AlertaPrecio`|
-|**Abrir** (listar y filtrar)|CU-03, CU-07, CU-10|*ídem*|*ídem*|*ídem*|
-|**Editar**|CU-04, CU-11|*ídem*|*ídem*|*ídem*|
-|**Eliminar**|CU-05, CU-08, CU-12|*ídem*|*ídem*|*ídem*|
-
-</div>
-
-<div align=center>
-
-![Realización de análisis genérica para CdU CRUD](../../imagenes/capitulo3/analisis-R-CRUD.svg)
-
-</div>
-
-> Las particularidades de cada CdU CRUD (validaciones específicas, postcondiciones, flujos alternativos) están recogidas en el [Detalle de los CdU](../capitulo2/detalleCdU.md) y se incorporan a las clases correspondientes en el [Análisis de clases](analisisClases.md). El [Diseño de los CdU](disenoCdU.md) ampliará el detalle de los CdU detallados aquí (CU-01, CU-09, CU-13, CU-14) con las decisiones tecnológicas concretas.
-
-## Validación de la realización
-
-<div align=center>
-
-|Criterio|Comprobación|
-|-|-|
-|**Completitud**|Cada CdU detallado en el Capítulo 2 tiene una realización de análisis (CU-01, CU-09, CU-13, CU-14) o queda cubierto por el patrón CRUD documentado al final|
-|**Asignación a subsistemas**|Cada clase de control pertenece al subsistema dueño del CdU según el [Análisis de la arquitectura](analisisArquitectura.md). Cada boundary pertenece al subsistema de frontera del actor correspondiente|
-|**Mecanismos arquitectónicos**|R(CU-01) y R(CU-13) usan el mecanismo de notificación de eventos. R(CU-14) usa el mecanismo de comunicación con sistemas externos. Todas usan implícitamente el mecanismo de persistencia|
-|**Trazabilidad inversa**|El nombre `R(CU-XX)` permite identificar de qué CdU proviene cada colaboración. Los nombres de boundary y control siguen una nomenclatura común que se conservará en el diseño|
-
-</div>
+> El flujo alternativo "detalle global" del CU-07, que recupera información puntual de la L1 (saldos perpetuos, saldos spot, staking y últimas operaciones para una dirección), reutiliza `ConectorHyperliquid` con una consulta puntual — sin alterar la estructura general del patrón CRUD. Se documenta como variación del controlador `GestorCatalogoEntidades` en el [diseño de los CdU](disenoCdU.md).

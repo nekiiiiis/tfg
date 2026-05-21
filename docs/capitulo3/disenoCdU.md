@@ -1,84 +1,84 @@
 # Diseño de los casos de uso
 
-## Propósito
+Refina las realizaciones del [análisis de los CdU](analisisCdU.md) sustituyendo cada rol de análisis por **clases de diseño** concretas y materializando los mensajes con la tecnología fijada en el [diseño de la arquitectura](disenoArquitectura.md). Se mantienen los cuatro CdU de riesgo desarrollados en detalle (CU-01, CU-09, CU-13, CU-14) y el patrón CRUD parametrizado para el resto.
 
-El diseño de los CdU refina las realizaciones de análisis (`R(CU-XX)`) hasta el nivel necesario para implementarlas: cada participante se identifica con su clase concreta, cada mensaje con su firma técnica y su mecanismo (invocación síncrona, llamada HTTP, mensaje WebSocket, evento del bus), cada decisión de transaccionalidad y cada interacción con la persistencia. El resultado son **diagramas de secuencia de diseño** que actúan como contrato directo para la implementación del Capítulo 4.
-
-<div align=center>
-
-||||
-|-|-|
-|**Punto de partida**|Realizaciones de análisis del [Análisis de los CdU](analisisCdU.md), módulos NestJS del [Diseño de la arquitectura](disenoArquitectura.md)|
-|**Resultado**|Diagrama de secuencia de diseño por CdU detallado, con tecnología, transaccionalidad y eventos explícitos|
-|**Restricción**|Cada mensaje del diagrama tiene una firma TypeScript ejecutable; cada participante existe como clase real del [Diseño de clases](disenoClases.md)|
-
-</div>
-
-## Convenciones de los diagramas
+## Convenciones
 
 <div align=center>
 
-|Convención|Significado|
+|Estereotipo|Significado en este capítulo|
 |-|-|
-|`UsuarioBrowser`|Navegador del Usuario, ejecutando el bundle React|
-|`<<controller>>`|Adaptador primario REST (NestJS controller con decorador `@Controller`)|
-|`<<gateway>>`|Adaptador primario WebSocket (NestJS gateway con decorador `@WebSocketGateway`)|
-|`<<service>>`|Servicio de aplicación (clase con decorador `@Injectable` que implementa un puerto de entrada)|
-|`<<repo>>`|Adaptador secundario de persistencia (implementación TypeORM o ioredis)|
-|`<<adapter>>`|Adaptador secundario hacia un sistema externo (Hyperliquid, Webhook)|
-|`EventBus`|Instancia global de `EventEmitter2` inyectada en cada productor|
-|`emit(...)`|Publicación de un evento del dominio (asíncrona, sin retorno)|
-|`@OnEvent('X')`|Suscripción declarativa de un consumidor a un evento|
-|*activación discontinua*|Operación asíncrona que se completa fuera del flujo síncrono del CdU|
+|`<<gateway>>`|Punto de entrada técnico (`*.routes.ts` para HTTP, `leaderboard.ws.ts` para WebSocket)|
+|`<<service>>`|Servicio de aplicación; orquesta un CdU o un grupo cohesivo|
+|`<<handler>>`|Función o ámbito léxico que reacciona a un evento del bus|
+|`<<adapter>>`|Implementación concreta de un puerto hacia el exterior|
+|`<<repo>>`|Acceso a la persistencia (Drizzle queries) dentro de un servicio|
 
 </div>
+
+> Las clases reseñadas en cada tabla apuntan a artefactos reales del repositorio. La trazabilidad código ↔ diseño se cierra en el [diseño de clases](disenoClases.md) y en el [diseño de paquetes](disenoPaquetes.md).
+
+---
 
 ## Realización de CU-01 — Consultar leaderboard
 
-### Participantes
+### Participantes (refinamiento de la realización de análisis)
 
 <div align=center>
 
-|Rol de análisis|Clase de diseño|Módulo|Estereotipo|
+|Rol de análisis|Clase de diseño|Estereotipo|Ubicación|
 |-|-|-|-|
-|Actor `Usuario`|`UsuarioBrowser`|*frontend*|—|
-|`VistaLeaderboard`|`LeaderboardView` (componente React) + `LeaderboardClient` (cliente WS)|*frontend*|—|
-|—|`LeaderboardGateway`|`RealtimeModule`|`<<gateway>>`|
-|`GestorConsultaLeaderboard`|`LeaderboardService`|`LeaderboardModule`|`<<service>>`|
-|`LeaderboardEnVivo`|`LeaderboardSnapshotRepository`|`LeaderboardModule`|`<<repo>>` *(Redis)*|
-|`GestorCatalogoEntidades` *(parcial)*|`AddressNameResolver`|`CatalogoModule`|`<<service>>`|
-|`ConectorHyperliquid`|`HyperliquidConnector`|`IngestionModule`|`<<adapter>>`|
-|—|`OperationIngestionHandler`|`LeaderboardModule`|`<<service>>` *(handler)*|
+|`VistaLeaderboard`|`LeaderboardPage` + `LeaderboardTable` + `LeaderboardFilters` + `AppDataContext`|frontend|`web/src/pages/LeaderboardPage.tsx`, `web/src/features/leaderboard/*`, `web/src/core/AppDataContext.tsx`|
+|—|`registerLeaderboardGateway` (WS)|`<<gateway>>`|`app/src/modules/leaderboard/leaderboard.ws.ts`|
+|`GestorConsultaLeaderboard`|`LeaderboardService`|`<<service>>`|`app/src/modules/leaderboard/leaderboard.service.ts`|
+|`LeaderboardEnVivo`|`LeaderboardState`|in-memory|`app/src/modules/leaderboard/leaderboard.state.ts`|
+|—|`TradePersistence`|`<<service>>` + `<<repo>>` (sobre `lb_trades`)|`app/src/modules/leaderboard/trade-persistence.service.ts`|
+|`ConectorHyperliquid`|`PublicWsAdapter`, implementación de `IHyperliquidSource`|`<<adapter>>`|`app/src/sources/public-ws.adapter.ts`|
+|`GestorCatalogoEntidades` *(consulta)*|`CatalogoService.resolverDirecciones`|`<<service>>`|`app/src/modules/catalogo/catalogo.service.ts`|
 
 </div>
 
-### Flujo
+### Flujo de diseño
 
-1. El Usuario abre la vista; `LeaderboardClient` establece conexión WebSocket con `LeaderboardGateway` y envía un mensaje `subscribe-leaderboard` con `{mercado, token, temporalidad}`.
-2. `LeaderboardGateway` invoca a `LeaderboardService.subscribe(...)`, que consulta el snapshot actual a `LeaderboardSnapshotRepository`, lo enriquece con nombres vía `AddressNameResolver` y lo emite al cliente.
-3. En paralelo, `HyperliquidConnector` está publicando continuamente eventos `OperacionRecibida` en el `EventBus`. `OperationIngestionHandler` (suscrito vía `@OnEvent('OperacionRecibida')`) actualiza el Sorted Set de Redis y emite `LeaderboardActualizado` con el delta.
-4. `LeaderboardGateway` está suscrito a `LeaderboardActualizado` y reenvía la actualización al cliente sobre la conexión WebSocket existente.
-5. Al cerrar la vista, el cliente envía `unsubscribe-leaderboard`. Si no quedan suscriptores activos para esa terna, `LeaderboardService` instruye a `HyperliquidConnector` para cerrar el canal de operaciones.
+1. El cliente abre la página `LeaderboardPage`. `AppDataContext` establece una única conexión WebSocket con el backend en `/ws/leaderboard` y envía un mensaje `subscribe` con `{ mercado, token, temporalidad }`.
+2. `registerLeaderboardGateway` recibe la suscripción y delega en `LeaderboardService.subscribe(terna)`. Este último:
+   - Resuelve el `displayToken` a `feedCoin` (identificador interno de Hyperliquid) usando `MetaService`.
+   - Abre — o reutiliza — un canal de trades para el par mediante `IHyperliquidSource.subscribeTrades(feedCoin)`.
+   - Siembra el snapshot inicial desde dos fuentes complementarias: (a) el buffer del canal en memoria, si lleva tiempo abierto; (b) la tabla `lb_trades` consultada por `TradePersistence.getHistorical`, para temporalidades largas (`1d`, `1w`).
+   - Encola un *backfill* con `IHyperliquidSource.getRecentTrades` para reducir el hueco entre el snapshot y los trades en vivo.
+3. Por cada trade que llega vía WS, `LeaderboardService`:
+   - Lo deduplica por `tid`.
+   - Lo encola en `TradePersistence` (flush periódico a `lb_trades`).
+   - Lo agrega en `LeaderboardState` para todas las ternas activas del par.
+   - Publica `LeaderboardActualizado` en el bus.
+4. `registerLeaderboardGateway`, suscrito a `LeaderboardActualizado`, reenvía la actualización al cliente sobre la conexión WS existente.
+5. `LeaderboardTable` consulta `POST /api/direcciones/resolver` (servido por `CatalogoService`) para resolver los nombres de las direcciones presentes y los pinta junto a la dirección abreviada.
+6. Al cerrar la página, el cliente desconecta el WS. Si no quedan suscriptores para el par, el canal entra en *grace period*; tras él pasa al estado `keepAlive` para seguir alimentando `lb_trades` aunque ningún usuario lo esté viendo (RS-03).
 
-<div align=center>
-
-![Diseño de secuencia para CU-01](../../imagenes/capitulo3/diseno-secuencia-CU-01.svg)
-
-</div>
-
-### Decisiones de diseño explícitas
+### Decisiones de diseño
 
 <div align=center>
 
 |Decisión|Justificación|
 |-|-|
-|**Push del backend al cliente vía WebSocket**, en lugar de polling|RS-01: latencia sub-segundo. Polling cada 100 ms saturaría la red sin garantía de frescura|
-|**Sorted Set de Redis** indexado por `(mercado, token, temporalidad)` con score = volumen acumulado|`LeaderboardEnVivo` del análisis se materializa así. Inserción y consulta de los *N* primeros son O(log N)|
-|**Resolución de nombres separada en `AddressNameResolver`**|Evita que `LeaderboardService` conozca el modelo de catálogo. La frontera entre módulos se mantiene|
-|**Suscripción al canal de Hyperliquid solo si hay clientes conectados**|Optimización: el sistema no consume bandwidth ni CPU si nadie observa la terna. Reduce la carga sobre Hyperliquid|
-|**Ventana deslizante implementada con `ZREMRANGEBYSCORE`** sobre `instante`|La purga de operaciones antiguas se ejecuta al insertar; no requiere job aparte|
+|`LeaderboardState` in-memory en vez de almacenamiento externo|Una sola máquina, RS-01 (≤ 1 s), sin necesidad de compartir estado entre réplicas|
+|`TradePersistence` con flush en batch (`500 ms` o `1000 ops`)|Independiza el ritmo del WS de Hyperliquid del ritmo de `INSERT` en Postgres|
+|Polling REST `recentTrades` adaptativo|Red de seguridad ante huecos del WS; intervalo dinámico según frescura del WS y polls vacíos|
+|Dedupe por `tid` además de `ts`|Los mismos trades pueden venir por WS y por REST; el `tid` da identidad estable|
+|Resolución de nombres por HTTP desde el cliente|Mantiene a `LeaderboardService` independiente del modelo de catálogo; la resolución es un detalle de presentación|
+|Pre-warm de canales por configuración (`LEADERBOARD_PREWARM`)|Permite que el server arranque ya alimentando `lb_trades` para los pares que vayan a usarse, sin esperar al primer suscriptor|
 
 </div>
+
+### Diagrama de secuencia
+
+<div align=center>
+
+![Secuencia de diseño CU-01](../../imagenes/capitulo3/diseno-secuencia-CU-01.svg)
+
+</div>
+
+---
 
 ## Realización de CU-09 — Crear alerta de precio
 
@@ -86,47 +86,55 @@ El diseño de los CdU refina las realizaciones de análisis (`R(CU-XX)`) hasta e
 
 <div align=center>
 
-|Rol de análisis|Clase de diseño|Módulo|Estereotipo|
+|Rol de análisis|Clase de diseño|Estereotipo|Ubicación|
 |-|-|-|-|
-|Actor `Usuario`|`UsuarioBrowser`|*frontend*|—|
-|`VistaAlertas`|`AlertaFormView` (componente React)|*frontend*|—|
-|—|`AlertasController`|`HttpModule`|`<<controller>>`|
-|`GestorAlertasPrecio`|`AlertasService`|`AlertasModule`|`<<service>>`|
-|—|`AlertasRepository`|`AlertasModule`|`<<repo>>` *(Postgres)*|
-|`ConectorWebhook`|`WebhookConnector`|`NotificacionModule`|`<<adapter>>`|
-|—|`CatalogoQueryService`|`CatalogoModule`|`<<service>>` *(validación de token)*|
+|`VistaAlertas`|`AlertasPage` + `AlertaForm`|frontend|`web/src/pages/AlertasPage.tsx`, `web/src/features/alertas/AlertaForm.tsx`|
+|—|`registerAlertasRoutes` (`POST /api/alertas`)|`<<gateway>>`|`app/src/modules/alertas/alertas.routes.ts`|
+|`GestorAlertasPrecio`|`AlertasService.crear`|`<<service>>` + `<<repo>>`|`app/src/modules/alertas/alertas.service.ts`|
+|`ConectorWebhook`|`WebhookConnector.checkReachability`|`<<adapter>>`|`app/src/modules/notificacion/webhook.connector.ts`|
+|`AlertaPrecio`|Tabla `alertas` (Drizzle schema)|—|`app/src/persistence/schema/alertas.ts`|
+|`Webhook`|Cifrado `pgp_sym_encrypt`|—|`app/src/persistence/crypto.ts`|
 
 </div>
 
-### Flujo
+### Flujo de diseño
 
-1. El Usuario completa el formulario y `AlertaFormView` envía `POST /api/alertas` con el `CrearAlertaDto` validado por `class-validator`.
-2. `AlertasController` deserializa el DTO y delega en `AlertasService.crear(dto)`.
-3. `AlertasService` valida el token consultando `CatalogoQueryService.existeToken(...)`.
-4. `AlertasService` valida la alcanzabilidad del webhook llamando a `WebhookConnector.checkReachability(url)`. Si el webhook no responde, **no se aborta**: se devuelve un aviso al usuario, pero la alerta se crea (RS sobre alerta queda en estado `OPERATIVA`).
-5. `AlertasService` mapea el DTO a la entidad `AlertaPrecio` (con webhook cifrado por `pgcrypto`) y persiste vía `AlertasRepository.save(alerta)`.
-6. `AlertasService` emite `AlertaCreada` en el bus *(opcional, para auditoría futura)* y devuelve la entidad.
-7. `AlertasController` responde `201 Created` con el DTO de respuesta (sin la URL de webhook, RS-10).
+1. El cliente envía `POST /api/alertas` con `{ mercado, token, umbral: { cruce, valor }, webhookUrl }`.
+2. La ruta valida el cuerpo con Zod (mismo nivel que un DTO).
+3. `AlertasService.crear` realiza:
+   - Validación de invariantes del dominio (`umbral.valor > 0`, formato de URL).
+   - `WebhookConnector.checkReachability` (HEAD o GET con timeout corto); el resultado se incluye en la respuesta como aviso, sin bloquear el alta.
+   - Cifrado de la URL del webhook con `encryptWebhook` (`pgp_sym_encrypt`).
+   - `INSERT` en la tabla `alertas` con estado `OPERATIVA`.
+4. La ruta responde con la alerta creada (la URL del webhook se devuelve descifrada para conveniencia del cliente).
 
-<div align=center>
-
-![Diseño de secuencia para CU-09](../../imagenes/capitulo3/diseno-secuencia-CU-09.svg)
-
-</div>
-
-### Decisiones de diseño explícitas
+### Decisiones de diseño
 
 <div align=center>
 
 |Decisión|Justificación|
 |-|-|
-|**Validación en dos niveles**: `class-validator` (estructural, en el controller) + reglas de negocio (en el service)|Separación de responsabilidades: el controller valida que la petición *está bien formada*; el service valida que *cumple las reglas del dominio*|
-|**Webhook cifrado en BD** (`pgp_sym_encrypt`)|RS-10. La clave maestra reside en variable de entorno; el repositorio descifra al recuperar|
-|**Webhook inalcanzable no aborta la creación**|Decisión de UX: el webhook puede caer transitoriamente; la alerta sigue siendo válida. El sistema reintenta al notificar (RS-07)|
-|**`AlertaCreada` emitida aunque ningún consumidor lo necesite hoy**|Preparación para RS-04: futuras herramientas (e.g., audit log, dashboard de alertas) se enchufan al evento sin tocar `AlertasService`|
-|**Transacción ACID para la creación**|`@Transactional` envuelve la persistencia. Si emitir el evento falla *antes* del commit, la transacción se aborta y el cliente recibe error|
+|Cifrado simétrico con `pgcrypto`|RS-10: la URL del webhook no queda en texto plano en BD; la clave maestra (`APP_SECRET`) vive en el proceso, no en filas|
+|Validación de alcanzabilidad como aviso, no como precondición|Un webhook puede estar momentáneamente caído sin que ello impida el alta de la alerta; los reintentos (RS-07) cubren la entrega cuando suba|
+|`AlertasService` accede a Drizzle directamente|Servicio fino; no hay valor añadido en interponer un `IAlertasRepository`|
 
 </div>
+
+### Diagrama de secuencia
+
+<div align=center>
+
+![Secuencia de diseño CU-09](../../imagenes/capitulo3/diseno-secuencia-CU-09.svg)
+
+</div>
+
+### Variaciones
+
+- **CU-10 (Abrir alertas)**: `AlertasService.listar` con `pgp_sym_decrypt` integrado en la `SELECT` para devolver URLs ya en claro al cliente autorizado.
+- **CU-11 (Editar alerta)**: `AlertasService.actualizar`, con re-verificación opcional del webhook si cambia la URL.
+- **CU-12 (Eliminar alerta)**: `AlertasService.eliminar` con `DELETE` simple (las notificaciones asociadas mantienen el `alerta_id` por trazabilidad — la integridad referencial se modela `ON DELETE CASCADE`).
+
+---
 
 ## Realización de CU-13 — Evaluar alertas activas
 
@@ -134,45 +142,50 @@ El diseño de los CdU refina las realizaciones de análisis (`R(CU-XX)`) hasta e
 
 <div align=center>
 
-|Rol de análisis|Clase de diseño|Módulo|Estereotipo|
+|Rol de análisis|Clase de diseño|Estereotipo|Ubicación|
 |-|-|-|-|
-|Actor `Hyperliquid L1`|*(externo)*|—|—|
-|`ConectorHyperliquid`|`HyperliquidConnector`|`IngestionModule`|`<<adapter>>`|
-|`GestorEvaluacionAlertas`|`PriceUpdateHandler` + `AlertEvaluator`|`EvaluacionModule`|`<<service>>`|
-|`GestorAlertasPrecio` *(parcial)*|`AlertasQueryService`|`AlertasModule`|`<<service>>`|
-|—|`AlertasRepository`|`AlertasModule`|`<<repo>>`|
-|*(emisión de evento)*|`EventBus`|`SharedKernelModule`|—|
+|`ConectorHyperliquid`|`PublicWsAdapter.subscribeAllMids`|`<<adapter>>`|`app/src/sources/public-ws.adapter.ts`|
+|—|Traducción `midsKey → display token` y emisión de `PrecioActualizado` en el bus|—|`app/src/server.ts` (composition root)|
+|`GestorEvaluacionAlertas`|`wireEvaluacion` (suscriptor `<<handler>>`)|`<<handler>>`|`app/src/modules/evaluacion/evaluacion.subscriber.ts`|
+|—|`evaluarAlertasContraPrecio` (función pura)|—|`app/src/modules/evaluacion/evaluator.ts`|
+|`GestorAlertasPrecio` *(consulta)*|`SELECT ... WHERE estado='OPERATIVA' AND token_simbolo=?`|`<<repo>>`|*(inline en `evaluacion.subscriber.ts`)*|
+|`GestorEnvioNotificacion`|`NotificacionService.dispararParaAlerta`|`<<service>>`|`app/src/modules/notificacion/notificacion.service.ts`|
 
 </div>
 
-### Flujo
+### Flujo de diseño
 
-1. `HyperliquidConnector` recibe un mensaje WebSocket de Hyperliquid con un nuevo precio. Lo mapea a la entidad `Precio` y emite `PrecioActualizado` en el bus.
-2. `PriceUpdateHandler` (suscrito con `@OnEvent('PrecioActualizado')`) recupera las alertas operativas para ese token vía `AlertasQueryService.recuperarOperativasPara(token)` (consulta indexada en BD).
-3. Para cada alerta, `AlertEvaluator.evaluar(alerta, precio)` aplica el predicado del umbral. Si se cumple:
-   - `AlertasRepository.marcarComoDisparada(alertaId)` (cambio de estado en transacción).
-   - `EventBus.emit('AlertaDisparada', { alertaId, precioDisparador })` para que `S-NOTI` realice CU-14.
-4. Las alertas que no cumplen se ignoran silenciosamente.
-5. `PriceUpdateHandler` retorna inmediatamente; el handler de `AlertaDisparada` reside en otro módulo y se ejecuta en su propia activación.
+1. `PublicWsAdapter` recibe del WS un objeto `allMids` con los precios mid actuales de **todos** los activos listados.
+2. El composition root (`server.ts`) compara con la última lectura conocida, traduce cada `midsKey` al `displayToken` usando `MetaService.getMidsKeyToDisplay()` y, para cada precio que ha cambiado, publica `PrecioActualizado` en el bus con el token en formato display.
+3. `wireEvaluacion`, suscrito a `PrecioActualizado`, recupera las alertas operativas para ese token con una consulta indexada (`alertas_token_estado`).
+4. `evaluarAlertasContraPrecio` aplica el predicado `evaluarUmbral` (definido en el dominio, `domain/types.ts`) a cada alerta y devuelve los identificadores disparados.
+5. Para cada alerta disparada:
+   - `UPDATE alertas SET estado='DISPARADA', ultimo_disparo=now() WHERE id=...`.
+   - `bus.emit('AlertaDisparada', ...)` para los suscriptores observables (logging, métricas).
+   - Llamada directa a `NotificacionService.dispararParaAlerta(alertaId, precio)` para realizar CU-14.
 
-<div align=center>
-
-![Diseño de secuencia para CU-13](../../imagenes/capitulo3/diseno-secuencia-CU-13.svg)
-
-</div>
-
-### Decisiones de diseño explícitas
+### Decisiones de diseño
 
 <div align=center>
 
 |Decisión|Justificación|
 |-|-|
-|**Handler asíncrono no bloqueante**|Cada `PrecioActualizado` se procesa en su propia activación del event loop. Múltiples precios concurrentes no se serializan|
-|**Consulta de alertas operativas por token con índice**|RS-02: latencia ≤ 2 s. El índice `(token, estado)` en la tabla `alertas` hace la consulta O(log N + K) donde K es el número de alertas operativas para ese token|
-|**Cambio de estado y emisión en transacción**|Si la persistencia del cambio falla, no se emite el evento — evita notificaciones huérfanas|
-|**Separación `PriceUpdateHandler` ↔ `AlertEvaluator`**|`PriceUpdateHandler` orquesta; `AlertEvaluator` aplica la regla pura. El `AlertEvaluator` es testeable sin BD ni eventos|
+|Predicado del umbral como función pura en dominio|Reutilizable desde la evaluación y desde tests; no acopla la evaluación a la persistencia|
+|Consulta indexada por `(token_simbolo, estado)`|RS-02: hasta miles de alertas operativas se filtran en `O(log n)` para el token afectado|
+|Llamada directa a CU-14 en lugar de pasar por bus|La relación `<<include>>` identificada en la captura de casos de uso es síncrona en intención; la llamada directa es más simple y mantiene un trazado claro|
+|Procesamiento por evento en el event loop (no por batch)|Cada precio se procesa en su propia activación; múltiples precios concurrentes no se serializan en un mismo callback|
 
 </div>
+
+### Diagrama de secuencia
+
+<div align=center>
+
+![Secuencia de diseño CU-13](../../imagenes/capitulo3/diseno-secuencia-CU-13.svg)
+
+</div>
+
+---
 
 ## Realización de CU-14 — Enviar notificación
 
@@ -180,129 +193,109 @@ El diseño de los CdU refina las realizaciones de análisis (`R(CU-XX)`) hasta e
 
 <div align=center>
 
-|Rol de análisis|Clase de diseño|Módulo|Estereotipo|
+|Rol de análisis|Clase de diseño|Estereotipo|Ubicación|
 |-|-|-|-|
-|*(consumidor del evento)*|`AlertTriggeredHandler`|`NotificacionModule`|`<<service>>`|
-|`GestorEnvioNotificacion`|`NotificacionService`|`NotificacionModule`|`<<service>>`|
-|`ConectorWebhook`|`WebhookConnector`|`NotificacionModule`|`<<adapter>>`|
-|—|`NotificacionesRepository`|`NotificacionModule`|`<<repo>>` *(Postgres)*|
-|—|`RetryQueueAdapter`|`NotificacionModule`|`<<repo>>` *(Redis list)*|
-|`GestorAlertasPrecio` *(parcial)*|`AlertasService`|`AlertasModule`|`<<service>>`|
-|Actor `Servicio Webhook`|*(externo)*|—|—|
+|`GestorEnvioNotificacion`|`NotificacionService`|`<<service>>` + `<<repo>>` (sobre `notificaciones`)|`app/src/modules/notificacion/notificacion.service.ts`|
+|`ConectorWebhook`|`WebhookConnector.transmit`|`<<adapter>>`|`app/src/modules/notificacion/webhook.connector.ts`|
+|—|`startRetryWorker` (worker periódico)|`<<service>>`|`app/src/modules/notificacion/retry.worker.ts`|
+|`Notificacion`|Tabla `notificaciones` (Drizzle schema)|—|`app/src/persistence/schema/notificaciones.ts`|
 
 </div>
 
-### Flujo
+### Flujo de diseño
 
-1. `AlertTriggeredHandler` (suscrito con `@OnEvent('AlertaDisparada')`) recibe `{ alertaId, precioDisparador }`, recupera la `AlertaPrecio` (con la URL del webhook descifrada) y delega en `NotificacionService.enviar(alerta, precio)`.
-2. `NotificacionService` construye la `Notificacion` (con `instanteEmision = now()` y `estadoEntrega = PENDIENTE`) y la persiste vía `NotificacionesRepository.save(notif)` *(RS-09: trazabilidad)*.
-3. `NotificacionService` invoca `WebhookConnector.transmitir(notif, alerta.webhook)`.
-   - **Éxito (HTTP 2xx)**: `NotificacionService` actualiza `estadoEntrega = ENTREGADA`, emite `NotificacionConfirmada` y solicita a `AlertasService.rearmarAlerta(alertaId)` *(transición DISPARADA → OPERATIVA)*.
-   - **Fallo (no 2xx, timeout o red)**: `NotificacionService` actualiza `estadoEntrega = FALLIDA`, emite `NotificacionFallida`, encola en `RetryQueueAdapter.enqueue({alertaId, intento: 1})` y solicita `AlertasService.marcarNotificacionFallida(alertaId)` *(estado NOTIFICACION_FALLIDA)*.
-4. Un consumidor independiente (`RetryWorker`) consume la cola con backoff exponencial. Cada intento reutiliza el mismo flujo a partir del paso 2.
+1. `NotificacionService.dispararParaAlerta(alertaId, precio)`:
+   - `INSERT` en `notificaciones` con `estado='PENDIENTE'`, `precio_disparador`, `instante_emision=now()`, `intento=1`, `proximo_intento=now()`.
+   - Llama a `transmitirYActualizar(notificacionId)` en background (no bloquea el evaluador).
+2. `transmitirYActualizar`:
+   - `SELECT` con `pgp_sym_decrypt(webhook_url_enc, APP_SECRET)` para recuperar la URL en claro.
+   - `WebhookConnector.transmit(url, payload)` con timeout de 10 s.
+   - **Éxito**: `UPDATE notificaciones SET estado='ENTREGADA', entregada_en=now()` y `UPDATE alertas SET estado='OPERATIVA'`; emite `NotificacionConfirmada` al bus.
+   - **Fallo**: calcula `proximo_intento` con la política de backoff acumulado; `UPDATE notificaciones SET estado='FALLIDA' (transitorio), intento=intento+1, proximo_intento=...`; `UPDATE alertas SET estado='NOTIFICACION_FALLIDA'`; emite `NotificacionFallida`.
+3. `startRetryWorker`, tickeando cada `NOTIFICATION_RETRY_TICK_SECONDS`:
+   - `SELECT ... WHERE estado IN ('PENDIENTE','FALLIDA') AND proximo_intento <= now()` (usando el índice `notif_pendientes_proximas`).
+   - Llama a `transmitirYActualizar` para cada fila.
+4. Cuando el `intento` supera el máximo configurado, la notificación queda en `FALLIDA` permanente y el worker la deja de tomar (manteniéndose como registro auditable, RS-09).
 
-<div align=center>
-
-![Diseño de secuencia para CU-14](../../imagenes/capitulo3/diseno-secuencia-CU-14.svg)
-
-</div>
-
-### Decisiones de diseño explícitas
+### Decisiones de diseño
 
 <div align=center>
 
 |Decisión|Justificación|
 |-|-|
-|**Persistir la notificación antes de transmitir**|RS-09: trazabilidad. Si el proceso muere durante la transmisión, la notificación queda en BD con `estadoEntrega = PENDIENTE` y un job de recuperación al arrancar la procesa|
-|**Cola de reintentos en Redis (list + `BRPOP`), no en memoria**|Sobrevive a reinicios del contenedor (RS-03). Backoff exponencial: 1s, 5s, 30s, 5min, 30min, 1h (máximo 6 intentos)|
-|**Rearme de alerta condicionado a confirmación**|La transición DISPARADA → OPERATIVA solo ocurre tras 2xx. Si todos los reintentos fallan, la alerta queda en `NOTIFICACION_FALLIDA` y exige acción manual (CU-11 / CU-12)|
-|**Webhook descifrado en memoria solo durante la transmisión**|RS-10: la URL no se loguea, no se serializa en respuesta HTTP, no se persiste en cache|
-|**Eventos `NotificacionConfirmada` y `NotificacionFallida` emitidos siempre**|Habilita auditoría futura sin tocar el flujo principal (RS-04)|
+|Cola virtual sobre `notificaciones` en lugar de cola externa|Una sola dependencia de infraestructura (Postgres); persistencia ACID; sin riesgo de divergencia entre cola y BD|
+|Backoff acumulado configurable|Política operativa por entorno sin tocar código (RS-07)|
+|`UPDATE alertas` desde el flujo de notificación|La alerta es la fuente de verdad del estado funcional; la notificación es el detalle de entrega|
+|Llamada en background tras `INSERT`|La evaluación (CU-13) no se bloquea esperando al webhook; el reintento garantiza eventualmente la entrega|
 
 </div>
 
-## Patrón genérico para los CdU CRUD (CU-02 a CU-08, CU-10 a CU-12)
-
-Los CdU CRUD restantes comparten una estructura idéntica. Documentar cada uno como secuencia individual aportaría redundancia sin información nueva. En su lugar se documenta **un patrón** que cada CdU instancia con su entidad y su gestor.
-
-### Estructura de la secuencia
+### Diagrama de secuencia
 
 <div align=center>
 
-|Paso|Participante origen|Participante destino|Mecanismo|
-|-|-|-|-|
-|1|`UsuarioBrowser`|`VistaXxx` (componente React)|UI nativa|
-|2|`VistaXxx`|`XxxController`|HTTP `POST` / `GET` / `PATCH` / `DELETE`|
-|3|`XxxController`|`XxxService`|Inyección de dependencia (Nest DI)|
-|4|`XxxService`|`XxxRepository`|Llamada síncrona|
-|5|`XxxRepository`|`PostgreSQL`|SQL parametrizado vía TypeORM|
-|6|`XxxService`|`EventBus`|`emit('XxxEvento', payload)` *(opcional)*|
-|7|`XxxController`|`UsuarioBrowser`|HTTP `200 OK` / `201 Created` / `204 No Content` con `XxxResponseDto`|
+![Secuencia de diseño CU-14](../../imagenes/capitulo3/diseno-secuencia-CU-14.svg)
 
 </div>
 
-### Instanciación del patrón
+---
+
+## Patrón CRUD — CU-02..CU-08 y CU-10..CU-12
+
+Estos once CdU comparten estructura de diseño. Se documenta el patrón una sola vez y se materializa en `*.routes.ts` + `*.service.ts` por subsistema.
+
+### Estructura genérica
 
 <div align=center>
 
-|CdU|`VistaXxx`|`XxxController`|`XxxService`|`XxxRepository`|Evento opcional|
-|-|-|-|-|-|-|
-|CU-02 Crear entidad|`EntidadFormView`|`EntidadesController.crear`|`CatalogoService.crearEntidad`|`EntidadesRepository`|`EntidadCreada`|
-|CU-03 Abrir entidades|`EntidadesListView`|`EntidadesController.listar`|`CatalogoService.listarEntidades`|`EntidadesRepository`|—|
-|CU-04 Editar entidad|`EntidadFormView`|`EntidadesController.editar`|`CatalogoService.editarEntidad`|`EntidadesRepository`|`EntidadEditada`|
-|CU-05 Eliminar entidad|`EntidadesListView`|`EntidadesController.eliminar`|`CatalogoService.eliminarEntidad`|`EntidadesRepository`|`EntidadEliminada`|
-|CU-06 Añadir dirección|`DireccionFormView`|`DireccionesController.añadir`|`CatalogoService.añadirDireccion`|`DireccionesRepository`|`DireccionAñadida`|
-|CU-07 Abrir direcciones|`DireccionesListView`|`DireccionesController.listar`|`CatalogoService.listarDirecciones`|`DireccionesRepository`|—|
-|CU-08 Eliminar dirección|`DireccionesListView`|`DireccionesController.eliminar`|`CatalogoService.eliminarDireccion`|`DireccionesRepository`|`DireccionEliminada`|
-|CU-10 Abrir alertas|`AlertasListView`|`AlertasController.listar`|`AlertasService.listar`|`AlertasRepository`|—|
-|CU-11 Editar alerta|`AlertaFormView`|`AlertasController.editar`|`AlertasService.editar`|`AlertasRepository`|`AlertaEditada`|
-|CU-12 Eliminar alerta|`AlertasListView`|`AlertasController.eliminar`|`AlertasService.eliminar`|`AlertasRepository`|`AlertaEliminada`|
-
-</div>
-
-<div align=center>
-
-![Patrón genérico CRUD](../../imagenes/capitulo3/diseno-secuencia-CRUD.svg)
-
-</div>
-
-### Reglas comunes a todos los CRUD
-
-<div align=center>
-
-|Regla|Aplicación|
-|-|-|
-|**Validación estructural en el controller**|Decoradores `@IsString`, `@IsUrl`, `@IsNotEmpty` de `class-validator` sobre el DTO de entrada|
-|**Validación de negocio en el service**|Unicidad de nombres, existencia de relaciones, estados válidos|
-|**Transaccionalidad**|`@Transactional` en operaciones que mutan más de una entidad (alta de entidad con direcciones iniciales, eliminación con cascada)|
-|**Códigos HTTP**|201 en creaciones, 200 en listados/ediciones, 204 en eliminaciones, 409 en conflictos de unicidad, 404 en recurso inexistente, 422 en validación|
-|**Paginación de listados**|Query params `?page=N&size=K` por defecto K=20 — documentado como `Pageable` en el contrato OpenAPI|
-|**Eventos opcionales emitidos siempre**|RS-04: futuras herramientas se conectan sin modificar el flujo|
-
-</div>
-
-## Validación del diseño de los CdU
-
-<div align=center>
-
-|Criterio|Comprobación|
-|-|-|
-|**Cada participante existe en el [Diseño de clases](disenoClases.md)**|Sí — los nombres son los mismos|
-|**Cada mensaje tiene firma TypeScript ejecutable**|Sí — los DTOs y métodos están definidos en el diseño de clases|
-|**Cada CdU respeta los límites de módulo**|Verificado: ningún `XxxService` invoca un repositorio de otro módulo|
-|**Eventos modelados correctamente**|`AlertaDisparada` cruza el límite `EvaluacionModule` → `NotificacionModule` por el bus, no por invocación directa|
-|**RS críticos cubiertos**|RS-01 (CU-01 vía Redis + WS), RS-02 (CU-13 vía índice + handler asíncrono), RS-04 (eventos), RS-07 (CU-14 con cola), RS-09 (notificaciones persistidas), RS-10 (webhooks cifrados)|
-
-</div>
-
-## Trazabilidad
-
-<div align=center>
-
-|De|A|Mecanismo|
+|Capa|Artefacto|Responsabilidad|
 |-|-|-|
-|Realización de análisis `R(CU-XX)`|Diseño de la secuencia de CU-XX|Mismo orden de mensajes; participantes con la misma responsabilidad bajo nombre técnico|
-|Diseño de la secuencia|Implementación|Cada mensaje del diagrama es un método invocado en código|
-|Decisiones de diseño explícitas|Pruebas|Cada decisión justifica un caso de prueba: cifrado de webhook → test que verifica la columna `bytea`; reintentos → test que provoca 5xx y verifica el encolado|
+|Frontend|`*Page` + `*Form`|Vista, formulario y *call site* hacia el API|
+|API|`*.routes.ts`|Validación Zod, mapeo de errores de dominio a HTTP|
+|Aplicación|`*Service.<verbo>`|Validación de invariantes, persistencia, emisión opcional de eventos|
+|Persistencia|Tabla Drizzle|Almacenamiento durable con índices y constraints|
+
+</div>
+
+### Verbos y tabla por CdU
+
+<div align=center>
+
+|CdU|Endpoint|Servicio|Tabla|
+|-|-|-|-|
+|**CU-02** Crear entidad|`POST /api/entidades`|`CatalogoService.crearEntidad`|`entidades`|
+|**CU-03** Abrir entidades|`GET /api/entidades`|`CatalogoService.listarEntidades`|`entidades`|
+|**CU-04** Editar entidad|`PATCH /api/entidades/:id`|`CatalogoService.renombrarEntidad`|`entidades`|
+|**CU-05** Eliminar entidad|`DELETE /api/entidades/:id`|`CatalogoService.eliminarEntidad`|`entidades` + cascada en `direcciones`|
+|**CU-06** Añadir dirección|`POST /api/entidades/:id/direcciones`|`CatalogoService.aniadirDireccion`|`direcciones`|
+|**CU-07** Abrir direcciones|`GET /api/entidades/:id/direcciones`|`CatalogoService.listarDirecciones`|`direcciones`|
+|**CU-07** *(detalle global)*|`GET /api/direcciones/:addr/{spot,perps,staking,fills}`|`AddressDetailService.*`|—|
+|**CU-08** Eliminar dirección|`DELETE /api/direcciones/:id`|`CatalogoService.eliminarDireccion`|`direcciones`|
+|**CU-10** Abrir alertas|`GET /api/alertas`|`AlertasService.listar`|`alertas`|
+|**CU-11** Editar alerta|`PATCH /api/alertas/:id`|`AlertasService.actualizar`|`alertas`|
+|**CU-12** Eliminar alerta|`DELETE /api/alertas/:id`|`AlertasService.eliminar`|`alertas` + cascada en `notificaciones`|
+
+</div>
+
+### Flujo genérico
+
+1. El cliente invoca el endpoint REST con cuerpo o parámetros.
+2. La ruta valida el cuerpo con Zod; en caso de error 400 con mensaje detallado.
+3. El servicio realiza la operación: para creaciones y ediciones, valida invariantes (unicidad, formato, existencia previa); para bajas, valida precondiciones (existencia, posibilidad de cascada).
+4. Drizzle persiste la mutación o devuelve la consulta; los errores de dominio (`EntidadNoEncontrada`, `AlertaNoEncontrada`, etc.) se mapean a códigos HTTP en el filtro global de errores.
+5. La ruta responde con el recurso o con un mensaje de confirmación.
+
+### Variación del CU-07 — Detalle global de una dirección
+
+La extensión funcional de CU-07 (vista integral con saldos perpetuos, saldos spot, resumen de staking y últimas operaciones) sigue el mismo patrón con dos particularidades:
+
+- El servicio (`AddressDetailService`) no accede a Postgres: delega en `IHyperliquidSource` para las cuatro consultas y enriquece la respuesta con metadatos del catálogo (`MetaService`).
+- No introduce mutación: es puramente consulta, por lo que no afecta a la tabla `direcciones`.
+
+### Diagrama de secuencia parametrizado
+
+<div align=center>
+
+![Secuencia de diseño CRUD](../../imagenes/capitulo3/diseno-secuencia-CRUD.svg)
 
 </div>

@@ -3,55 +3,92 @@ skinparam packageStyle rectangle
 skinparam shadowing false
 hide stereotype
 
-package "presentation" as PRES #E3F2FD {
-    package "http" as HTTP
-    package "realtime" as RT
+package "src/app/src" as APP {
+    package "server.ts\n<<composition root>>" as ROOT #ECEFF1
+    package "bus.ts (TypedBus)" as BUS #ECEFF1
+    package "config.ts" as CFG #ECEFF1
+
+    package "domain" as DOM #F3E5F5 {
+        package "types"
+        package "events"
+        package "errors"
+    }
+
+    package "sources" as SRC #FFF3E0 {
+        package "hyperliquid.port"
+        package "public-ws.adapter"
+        package "nanoreth-rpc.adapter"
+        package "factory"
+    }
+
+    package "modules" as MODS #E8F5E9 {
+        package "leaderboard" as LB
+        package "catalogo" as CAT
+        package "meta" as META
+        package "direccion-detalle" as DD
+        package "alertas" as AL
+        package "evaluacion" as EV
+        package "notificacion" as NOT
+    }
+
+    package "persistence" as PERS #FFF3E0 {
+        package "schema/*"
+        package "migrations/*"
+        package "db / crypto / ensure-schema"
+    }
+
+    package "shared" as SH #ECEFF1 {
+        package "logger"
+        package "errors (HTTP)"
+        package "health"
+    }
 }
 
-package "application" as APP #E8F5E9 {
-    package "catalogo" as A_CAT
-    package "alertas" as A_ALER
-    package "leaderboard" as A_LEAD
-    package "ingestion" as A_INGE
-    package "evaluacion" as A_EVAL
-    package "notificacion" as A_NOTI
-    package "shared" as A_SH
+package "src/web/src" as WEB {
+    package "pages" #E3F2FD
+    package "features" #E3F2FD
+    package "components/ui" #E3F2FD
+    package "core (api, AppDataContext, …)" #E3F2FD
 }
 
-package "infrastructure" as INFRA #FFF3E0 {
-    package "persistence/postgres" as I_PG
-    package "persistence/redis" as I_RD
-    package "connectors/hyperliquid" as I_HL
-    package "connectors/webhook" as I_WH
-    package "eventbus" as I_BUS
-}
+ROOT ..> MODS
+ROOT ..> SRC
+ROOT ..> PERS
+ROOT ..> SH
+ROOT ..> BUS
 
-package "domain" as DOM #F3E5F5 {
-    package "shared" as D_SH
-    package "catalogo" as D_CAT
-    package "alertas" as D_ALER
-    package "leaderboard" as D_LEAD
-    package "mercado" as D_MER
-    package "notificacion" as D_NOTI
-    package "events" as D_EV
-}
+LB ..> SRC
+LB ..> META
+LB ..> PERS
+LB ..> BUS
+CAT ..> PERS
+META ..> SH
+DD ..> SRC
+DD ..> META
+AL ..> PERS
+AL ..> NOT
+EV ..> BUS
+EV ..> PERS
+EV ..> NOT
+NOT ..> PERS
+NOT ..> BUS
+SRC ..> DOM
+PERS ..> DOM
+MODS ..> DOM
 
-package "shared (kernel)" as KERN #ECEFF1
-
-PRES ..> APP
-INFRA ..> APP
-APP ..> DOM
-PRES ..> DOM
-INFRA ..> DOM
-PRES ..> KERN
-APP ..> KERN
-INFRA ..> KERN
+WEB ..> APP : HTTP REST / WS
 
 note bottom of DOM
   Sin dependencias salientes.
-  Imports prohibidos hacia
-  application/, infrastructure/,
-  presentation/ por ESLint.
+  Reutilizable desde cualquier
+  capa por composición.
+end note
+
+note bottom of MODS
+  Organización por feature
+  (no por capa): cada CdU
+  vive en su subcarpeta con
+  servicios + rutas + estado.
 end note
 
 @enduml

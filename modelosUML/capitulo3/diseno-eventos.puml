@@ -3,38 +3,51 @@ skinparam shadowing false
 skinparam componentStyle rectangle
 hide stereotype
 
-[HyperliquidConnector] as HLC
-[OperationIngestionHandler] as OIH
-[PriceUpdateHandler] as PUH
-[AlertTriggeredHandler] as ATH
+[PublicWsAdapter] as HLC
+[LeaderboardService] as LS
+[server.ts\n(composition root)] as ROOT
+[wireEvaluacion\n<<handler>>] as EV
+[LeaderboardGateway\n<<handler>>] as GW
 [NotificacionService] as NS
+[Observabilidad\n(logger / health)] as OBS
 
-cloud "EventBus\n(EventEmitter2)" as BUS
+cloud "TypedBus\n(EventEmitter)" as BUS
 
 HLC -[#0277BD,bold]-> BUS : OperacionRecibida
-HLC -[#0277BD,bold]-> BUS : PrecioActualizado
-PUH -[#C62828,bold]-> BUS : AlertaDisparada
-NS  -[#2E7D32,bold]-> BUS : NotificacionConfirmada
-NS  -[#EF6C00,bold]-> BUS : NotificacionFallida
+ROOT -[#0277BD,bold]-> BUS : PrecioActualizado
+LS -[#1565C0,bold]-> BUS : LeaderboardActualizado
+EV -[#C62828,bold]-> BUS : AlertaDisparada
+NS -[#2E7D32,bold]-> BUS : NotificacionConfirmada
+NS -[#EF6C00,bold]-> BUS : NotificacionFallida
 
-BUS -[#0277BD,bold]-> OIH : OperacionRecibida
-BUS -[#0277BD,bold]-> PUH : PrecioActualizado
-BUS -[#C62828,bold]-> ATH : AlertaDisparada
+BUS -[#0277BD,bold]-> LS : OperacionRecibida
+BUS -[#0277BD,bold]-> EV : PrecioActualizado
+BUS -[#1565C0,bold]-> GW : LeaderboardActualizado
+BUS -[#C62828,bold]-> OBS : AlertaDisparada
+BUS -[#2E7D32,bold]-> OBS : NotificacionConfirmada
+BUS -[#EF6C00,bold]-> OBS : NotificacionFallida
 
 note bottom of BUS
-  - In-process (memoria compartida)
-  - At-most-once
-  - Sub-milisegundo
+  In-process, tipado por DomainEventMap.
+  Política at-most-once.
+  Sub-milisegundo entre productor
+  y consumidor.
 end note
 
 note right of HLC
-  Productor único
-  (frontera de Ingestión)
+  Productor principal:
+  trades vía WebSocket.
+end note
+
+note right of ROOT
+  Traduce midsKey → display
+  y emite PrecioActualizado
+  por cada cambio.
 end note
 
 note right of NS
-  Productor en
-  CU-14 (CONFIRMADA / FALLIDA)
+  Productor en CU-14
+  (confirmación / fallo).
 end note
 
 @enduml

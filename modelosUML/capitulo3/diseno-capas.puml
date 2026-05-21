@@ -8,58 +8,71 @@ actor "Usuario" as U
 actor "Hyperliquid L1" as HL
 actor "Servicio Webhook" as SW
 
-package "Adaptadores primarios\n(Presentation)" as PRES #E3F2FD {
-    [REST Controller] as REST
-    [WebSocket Gateway] as WS
+package "Presentación" as PRES #E3F2FD {
+    [Routes Fastify\n(REST)] as REST
+    [Gateway WS\n(/ws/leaderboard)] as WS
+    [SPA React\n(/public)] as SPA
 }
 
-package "Adaptadores secundarios\n(Infrastructure)" as INFRA #FFF3E0 {
-    [Hyperliquid\nConnector] as HLC
-    [Webhook\nConnector] as WHC
-    [TypeORM\nRepositories] as TORM
-    [ioredis\nRepositories] as IORED
+package "Infraestructura" as INFRA #FFF3E0 {
+    [PublicWsAdapter\n(IHyperliquidSource)] as HLC
+    [NanorethRpcAdapter\n(IHyperliquidSource)] as NRA
+    [WebhookConnector] as WHC
+    [Drizzle ORM\n(postgres-js)] as DRZ
+    [TypedBus\n(EventEmitter)] as BUS
 }
 
-package "Núcleo" as CORE {
-    package "Aplicación" as APP #E8F5E9 {
-        [Servicios de aplicación]
-        [Puertos de entrada]
-        [Puertos de salida]
-        [Event Handlers]
-    }
-    package "Dominio" as DOM #F3E5F5 {
-        [Entidades]
-        [Value Objects]
-        [Eventos del dominio]
-        [Excepciones]
-    }
+package "Aplicación" as APP #E8F5E9 {
+    [LeaderboardService] as LS
+    [TradePersistence] as TP
+    [CatalogoService] as CS
+    [MetaService] as MS
+    [AlertasService] as AS
+    [wireEvaluacion] as EV
+    [NotificacionService\n+ RetryWorker] as NS
 }
 
-U --> REST : HTTPS
-U --> WS  : WebSocket
-HL --> HLC : WebSocket
-WHC --> SW : HTTPS
+package "Dominio" as DOM #F3E5F5 {
+    [Tipos del dominio\n(Mercado, Token,\nOperacion, Precio, …)]
+    [DomainEventMap]
+    [DomainError]
+}
+
+U --> REST  : HTTPS
+U --> WS    : WebSocket
+U --> SPA   : HTML/JS/CSS
+HL --> HLC  : WebSocket + REST
+HLC --> WHC : (no aplica)
+WHC --> SW  : HTTPS POST
 
 REST ..> APP
-WS ..> APP
-HLC ..> APP
-WHC ..> APP
-TORM ..> APP
-IORED ..> APP
+WS   ..> APP
+HLC  ..> APP
+NRA  ..> APP
+WHC  ..> APP
+DRZ  ..> APP
+BUS  ..> APP
 
 APP --> DOM
+INFRA --> DOM
+PRES --> DOM
 
 note right of DOM
-  No conoce a:
-  - Aplicación
-  - Infraestructura
-  - Presentación
+  Capa pura.
+  Sin dependencias externas.
 end note
 
 note bottom of APP
-  Define puertos (interfaces).
-  La inversión de dependencia
-  es DI de NestJS.
+  Composición manual en
+  server.ts (composition root).
+  Inyección por constructor.
+end note
+
+note bottom of INFRA
+  Puerto hexagonal único:
+  IHyperliquidSource con
+  dos adaptadores intercambiables
+  (RS-08).
 end note
 
 @enduml

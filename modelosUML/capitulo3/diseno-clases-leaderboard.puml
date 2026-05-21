@@ -3,67 +3,99 @@ skinparam shadowing false
 skinparam classAttributeIconSize 0
 hide circle
 
-package "presentation/realtime" {
-    class LeaderboardGateway <<gateway>> {
-        + onSubscribe(q, socket): void
-        + notificar(ev): void
+package "presentación / leaderboard" {
+    class registerLeaderboardGateway <<gateway>> {
+        + handle('subscribe', terna, ws)
+        + handle('unsubscribe', terna, ws)
     }
 }
 
-package "application/leaderboard" {
-    interface ILeaderboardService <<port-in>> {
-        + obtenerSnapshot(q): Promise<FilaLeaderboardDto[]>
-        + suscribir(q, cliente): Promise<Suscripcion>
+package "modules/leaderboard" {
+    class LeaderboardService <<service>> {
+        - source : IHyperliquidSource
+        - meta : MetaService
+        - state : LeaderboardState
+        - persistence? : TradePersistence
+        + subscribe(terna, opts) : { snapshot, unsubscribe }
+        + snapshot(terna, topN, lado)
+        + close()
     }
-    interface ILeaderboardSnapshotRepository <<port-out>> {
-        + añadirOperacion(t, op)
-        + obtenerTopN(t, n)
-        + purgarVentana(t, hasta)
+    class LeaderboardState {
+        - windowSecondsByTemp
+        - maxOps
+        + ingest(terna, op)
+        + ingestBackfill(terna, ops[])
+        + snapshot(terna, topN, lado)
     }
-    class LeaderboardService <<service>>
-    class OperationIngestionHandler <<service>> {
-        + handle(ev): void  <<@OnEvent('OperacionRecibida')>>
+    class TradePersistence <<service>> {
+        + enqueue(op)
+        + enqueueMany(ops)
+        + flush()
+        + getHistorical(mercado, token, sinceMs, untilMs?)
+        + cleanup()
+        + start()
+        + stop()
     }
-}
-
-package "application/ingestion" {
-    interface IHyperliquidPort <<port-out>>
-}
-
-package "domain/leaderboard" {
-    class Operacion <<entity>>
-    class LeaderboardEnVivo <<entity>> <<conceptual>>
-    class Terna <<value>> {
-        + mercado
-        + token
-        + temporalidad
+    class LeaderboardBalancesService <<service>> {
+        - meta : MetaService
+        + batchBalances(addrs[]) : Saldo[]
     }
 }
 
-package "infrastructure/persistence/redis" {
-    class LeaderboardSnapshotRepositoryRedis <<repo>> #FFF3E0
+package "modules/meta" {
+    class MetaService <<service>> {
+        + resolveToken(mercado, displayToken) : Resolved
+        + resolveByFeedCoin(feedCoin)
+        + getMidsKeyToDisplay() : Map
+        + getCandles(...)
+        + getTopVolume(...)
+    }
 }
 
-package "infrastructure/connectors/hyperliquid" {
-    class HyperliquidConnector <<adapter>> #FFF3E0
-    class HyperliquidMessageParser #FFF3E0
+package "sources" {
+    interface IHyperliquidSource <<port>> {
+        + subscribeTrades(feedCoin, onTrade)
+        + subscribeAllMids(onAllMids)
+        + getRecentTrades(feedCoin) : Trade[]
+        + close()
+    }
+    class PublicWsAdapter <<adapter>> #FFF3E0
+    class NanorethRpcAdapter <<adapter>> #FFF3E0
 }
 
-LeaderboardGateway ..> ILeaderboardService
-LeaderboardService ..|> ILeaderboardService
-LeaderboardService ..> ILeaderboardSnapshotRepository
-OperationIngestionHandler ..> ILeaderboardSnapshotRepository
-OperationIngestionHandler ..> Operacion
-LeaderboardSnapshotRepositoryRedis ..|> ILeaderboardSnapshotRepository
-HyperliquidConnector ..|> IHyperliquidPort
-HyperliquidConnector ..> HyperliquidMessageParser
-HyperliquidConnector ..> Operacion
-LeaderboardEnVivo ..> Terna
+package "persistence" {
+    class "tabla lb_trades" as LBT <<table>> #ECEFF1
+    class "tabla direcciones / entidades" as CAT <<table>> #ECEFF1
+}
 
-note right of LeaderboardEnVivo
-  Conceptual: se materializa
-  en Redis (Sorted Set) vía
-  el repositorio
+package "bus" {
+    class TypedBus <<infrastructure>>
+}
+
+registerLeaderboardGateway ..> LeaderboardService
+registerLeaderboardGateway ..> TypedBus : on('LeaderboardActualizado')
+LeaderboardService ..> IHyperliquidSource
+LeaderboardService ..> MetaService
+LeaderboardService ..> LeaderboardState
+LeaderboardService ..> TradePersistence
+LeaderboardService ..> TypedBus : emit('LeaderboardActualizado')
+TradePersistence ..> LBT
+LeaderboardBalancesService ..> MetaService
+PublicWsAdapter ..|> IHyperliquidSource
+NanorethRpcAdapter ..|> IHyperliquidSource
+registerLeaderboardGateway ..> CAT : resolverDirecciones (vía CatalogoService)
+
+note right of LeaderboardState
+  Estado caliente in-memory:
+  ventana deslizante por
+  terna (mercado, token,
+  temporalidad).
+end note
+
+note bottom of NanorethRpcAdapter
+  Esqueleto no funcional.
+  Existe para validar RS-08
+  (sustituibilidad).
 end note
 
 @enduml

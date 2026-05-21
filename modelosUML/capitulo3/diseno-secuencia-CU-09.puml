@@ -2,36 +2,44 @@
 skinparam shadowing false
 
 actor "Usuario" as U
-participant "AlertaFormView\n(React)" as VIEW
-participant "AlertasController\n<<controller>>" as CTRL
+participant "AlertasPage\n+ AlertaForm\n(React)" as VIEW
+participant "registerAlertasRoutes\n<<gateway>>" as CTRL
 participant "AlertasService\n<<service>>" as SVC
-participant "CatalogoQueryService\n<<service>>" as CAT
 participant "WebhookConnector\n<<adapter>>" as WHC
-participant "AlertasRepository\n<<repo>>" as REPO
-participant "EventBus" as BUS
+participant "Drizzle\n(tabla alertas)" as DB
+participant "pgcrypto\n(pgp_sym_encrypt)" as CRY
 
 U -> VIEW : completar formulario
-VIEW -> CTRL : POST /api/alertas\nCrearAlertaDto
-CTRL -> CTRL : validar (estructural)
+VIEW -> CTRL : POST /api/alertas\n{mercado, token, umbral, webhookUrl}
+CTRL -> CTRL : validar con Zod
 
-CTRL -> SVC : crear(dto)
+CTRL -> SVC : crear(input)
 activate SVC
 
-SVC -> CAT : existeToken(symbol, mercado)
-CAT --> SVC : true
+SVC -> SVC : validar invariantes\n(umbral.valor > 0, URL)
 
-SVC -> WHC : checkReachability(webhook)
-WHC --> SVC : alcanzable=true|false
+SVC -> WHC : checkReachability(webhookUrl)
+activate WHC
+WHC -->> SVC : alcanzable? (no bloqueante)
+deactivate WHC
 
-SVC -> SVC : Mapper.fromDto(dto)\n+ cifrar webhook
-SVC -> REPO : save(alerta)\n[transactional]
-REPO --> SVC : ok
+SVC -> CRY : encryptWebhook(webhookUrl)
+CRY --> SVC : bytea (webhook_url_enc)
 
-SVC ->> BUS : emit AlertaCreada
-SVC --> CTRL : AlertaResponseDto
+SVC -> DB : INSERT alerta\nestado = OPERATIVA
+DB --> SVC : alerta creada
+
+SVC --> CTRL : alerta + aviso de alcanzabilidad
 deactivate SVC
 
-CTRL --> VIEW : 201 Created\n(sin URL webhook)
-VIEW --> U : confirmación\n+ aviso si webhook no alcanzable
+CTRL --> VIEW : 201 Created
+VIEW --> U : confirmación + aviso\n(si webhook no alcanzable)
+
+note right of SVC
+  El alta queda registrada
+  aunque el webhook no
+  responda: RS-07 cubre
+  reintentos al disparar.
+end note
 
 @enduml

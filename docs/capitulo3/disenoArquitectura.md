@@ -1,243 +1,249 @@
 # Diseño de la arquitectura
 
-## Propósito
+Concreta el esqueleto del [análisis de la arquitectura](analisisArquitectura.md) en una arquitectura técnica que satisface los requisitos suplementarios. Cada decisión se justifica como respuesta a un RS-XX y queda trazada al artefacto del repositorio que la materializa.
 
-El diseño de la arquitectura toma la descomposición lógica producida en el [Análisis de la arquitectura](analisisArquitectura.md) y la compromete con **decisiones tecnológicas concretas** —lenguaje, frameworks, persistencia, comunicación, despliegue— manteniendo intactas las propiedades arquitectónicas que la motivaron (cohesión por área, sustituibilidad de la frontera de Ingestión, extensibilidad por eventos). Es el puente final entre el modelo de análisis y el código del Capítulo 4.
+## Estilo arquitectónico
 
-<div align=center>
-
-||||
-|-|-|
-|**Punto de partida**|Subsistemas, mecanismos arquitectónicos y dependencias del análisis; requisitos suplementarios|
-|**Resultado**|Estilo arquitectónico, stack tecnológico, módulos del backend, mecanismos refinados, vista física preliminar|
-|**Restricción**|Cada decisión cita el RS o los CdU que la justifican y respeta los límites de subsistema fijados en el análisis|
-
-</div>
-
-## Decisiones tecnológicas globales
-
-<div align=center>
-
-|Aspecto|Decisión|Alternativas descartadas|RS justificado|
-|-|-|-|-|
-|Lenguaje del backend|**TypeScript** sobre Node.js 20 LTS|Python (más lento para I/O concurrente sostenido), Java/Kotlin (overhead operativo en self-hosting)|RS-01, RS-02, RS-03|
-|Framework del backend|**NestJS 10**|Express puro (sin DI ni modularidad), Fastify puro (ídem)|RS-04, RS-05|
-|Bus de eventos en proceso|**`@nestjs/event-emitter`** (EventEmitter2) síncrono con propagación asíncrona|RxJS *Subject* (más potente pero acoplaría el código a un paradigma reactivo), Kafka/NATS (overhead inadmisible en self-hosting de un solo nodo)|RS-04, RS-05|
-|Persistencia primaria|**PostgreSQL 16** vía **TypeORM**|MongoDB (sin transacciones ACID multidocumento que CU-09/CU-11 exigen), SQLite (no soporta concurrencia escritura)|RS-09, RS-10|
-|Almacenamiento caliente|**Redis 7** vía **ioredis**, con estructura *Sorted Set*|Memoria del proceso (no sobrevive a reinicios), Memcached (sin estructuras ordenadas)|RS-01, RS-02|
-|Lenguaje del frontend|**TypeScript** sobre **React 18** (Vite)|Angular (curva más alta sin beneficio adicional para la SPA mínima del Capítulo 1), Svelte (ecosistema más limitado)|RS-04|
-|Comunicación tiempo real|**WebSockets nativos** (`ws` en server, `WebSocket` en cliente)|Server-Sent Events (unidireccional), polling (incompatible con RS-01)|RS-01, RS-02|
-|Empaquetado y despliegue|**Docker Compose** sobre infraestructura Infinite Fieldx|Kubernetes (sobredimensionado), instalación nativa (incompatible con la voluntad de portabilidad)|RS-03, RS-08|
-
-</div>
-
-> Las versiones se fijan al inicio de implementación. Los criterios de selección se discuten en el Capítulo 4 al concretar `package.json` y `Dockerfile`.
-
-## Estilo arquitectónico: hexagonal con núcleo orientado a eventos
-
-El sistema adopta el estilo **Hexagonal** (también conocido como *Ports and Adapters*) por dos razones que se siguen directamente de los RS:
-
-<div align=center>
-
-|Razón|RS|Cómo lo resuelve hexagonal|
-|-|-|-|
-|La frontera de Ingestión debe ser sustituible (API → nodo no validador) sin afectar al núcleo|RS-08|El núcleo expresa su necesidad como un **puerto** (interfaz) y la implementación concreta es un **adaptador**. Sustituir uno por otro es cambiar la implementación inyectada|
-|Las áreas funcionales deben extenderse (nuevas herramientas) sin coordinación entre ellas|RS-04|Cada área expone sus puertos de entrada (servicios de aplicación) y sus puertos de salida (repositorios, conectores). Una nueva área se conecta inyectando los puertos que necesita; no toca el código existente|
-
-</div>
+El sistema adopta una **arquitectura en capas** con un **puerto hexagonal** en la única frontera técnicamente compleja: la integración con Hyperliquid L1. Esta combinación da, sin sobrecoste de framework, la separación de responsabilidades, la testabilidad y la sustituibilidad que los requisitos suplementarios demandan.
 
 ### Capas
 
-El núcleo se descompone en tres capas concéntricas; la frontera (adaptadores) las rodea.
-
 <div align=center>
 
-|Capa|Responsabilidad|Conoce a|No conoce a|
+|Capa|Responsabilidad|Conoce|Es conocida por|
 |-|-|-|-|
-|**Dominio** (`domain`)|Reglas de negocio puras: entidades, objetos valor, eventos del dominio, especificaciones, excepciones del dominio|*Nada* fuera de sí mismo|Aplicación, infraestructura, presentación|
-|**Aplicación** (`application`)|Orquestación de los CdU. Define los **puertos**: de entrada (interfaces de servicios de aplicación) y de salida (interfaces de repositorios y conectores). Aloja los servicios de aplicación que realizan los CdU|Dominio|Infraestructura, presentación|
-|**Infraestructura** (`infrastructure`)|**Adaptadores secundarios**: implementaciones concretas de los puertos de salida (repositorios TypeORM, cliente Redis, cliente Hyperliquid, cliente HTTP del webhook)|Aplicación, dominio|Presentación|
-|**Presentación** (`presentation`)|**Adaptadores primarios**: REST controllers (NestJS), gateway WebSocket, frontend SPA. Traducen la entrada externa a invocaciones de puertos de entrada|Aplicación, dominio|Infraestructura|
+|**Dominio**|Tipos del dominio, contratos de eventos, errores de negocio. Pura; sin dependencias externas.|—|Aplicación, presentación, infraestructura|
+|**Aplicación**|Servicios que coordinan los CdU; uno por subsistema del análisis. Orquesta dominio + infraestructura.|Dominio|Presentación, composition root|
+|**Infraestructura**|Adaptadores hacia el exterior (Hyperliquid, webhook), persistencia (PostgreSQL vía Drizzle) y mecanismos transversales (bus, logger).|Dominio (a través de tipos y eventos), aplicación (a través de interfaces)|Composition root|
+|**Presentación**|Gateways HTTP y WebSocket de Fastify, frontend React.|Aplicación (vía servicios inyectados), dominio (tipos para DTOs)|—|
 
 </div>
 
-<div align=center>
+La dirección de las dependencias respeta el principio de inversión: el dominio no conoce a nadie; la infraestructura conoce al dominio, no al revés.
 
-![Capas hexagonales del sistema](../../imagenes/capitulo3/diseno-capas.svg)
+### Puerto hexagonal: la frontera con Hyperliquid
 
-</div>
+`IHyperliquidSource` (`app/src/sources/hyperliquid.port.ts`) define el contrato de salida hacia la L1: suscripción al flujo de trades, al canal `allMids`, consultas REST puntuales (`recentTrades`, saldos, fills, staking). El núcleo del sistema (servicios de aplicación, dominio) depende únicamente de esta interfaz, no de protocolos.
 
-### Regla de dependencia
-
-> **Las dependencias apuntan siempre hacia adentro.** El dominio no depende de nada. La aplicación depende solo del dominio. La infraestructura y la presentación dependen de la aplicación y del dominio. La inversión de dependencias se materializa con la **inyección de dependencias** que aporta NestJS: los servicios de aplicación reciben los puertos como constructor parameters, no instancian implementaciones concretas.
-
-### Bus de eventos del dominio
-
-La comunicación entre subsistemas independientes (ingestión → leaderboard, ingestión → evaluación, evaluación → notificación) se realiza mediante un **bus de eventos en proceso**. Es un mecanismo de aplicación, no de infraestructura: vive en la capa de aplicación porque los eventos transportan **conceptos del dominio**, no detalles técnicos.
+Sobre ese puerto conviven dos adaptadores intercambiables:
 
 <div align=center>
 
-|Aspecto|Decisión|
-|-|-|
-|Implementación|`EventEmitter2` (`@nestjs/event-emitter`)|
-|Naming|Eventos en pasado, dominio puro: `OperacionRecibida`, `PrecioActualizado`, `AlertaDisparada`, `NotificacionConfirmada`, `NotificacionFallida`|
-|Delivery|*At-most-once*, en proceso. Un consumidor caído no recibe el evento — aceptable porque todos los eventos se persisten o se regeneran (operaciones se reciben continuamente, precios se reciben continuamente)|
-|Backpressure|Cada consumidor implementa su propia política. `GestorConsultaLeaderboard` acumula en Redis; `GestorEvaluacionAlertas` evalúa en línea (latencia esperada < 1 ms por evento)|
-|Persistencia|**No se persiste el bus en sí.** Los eventos que el sistema necesita conservar (notificaciones disparadas) se persisten en PostgreSQL como entidades del dominio, no como mensajes del bus|
-
-</div>
-
-<div align=center>
-
-![Eventos del dominio y consumidores](../../imagenes/capitulo3/diseno-eventos.svg)
-
-</div>
-
-> El bus es **un mecanismo de aplicación, no de integración entre procesos**. Si en el futuro Infinite Fieldx tuviese que escalar a varios procesos, el bus en memoria se sustituiría por NATS o Redis Streams sin tocar al núcleo: solo cambiaría el adaptador.
-
-## Mapeo subsistema → módulo NestJS
-
-Cada subsistema del análisis se materializa como un **módulo NestJS** (clase con decorador `@Module`). La frontera de presentación se descompone en dos módulos hermanos: uno HTTP (controladores REST) y otro WebSocket (gateway en tiempo real). El paquete `dominio` no es un módulo NestJS porque no necesita inyección: es código puro.
-
-<div align=center>
-
-|Subsistema|Módulo NestJS|Provee|Importa|
+|Adaptador|Estado|Mecanismo|Selección|
 |-|-|-|-|
-|S-PRES (HTTP)|`HttpModule` *(custom)*|REST controllers para CU-02..CU-12|`CatalogoModule`, `AlertasModule`|
-|S-PRES (WS)|`RealtimeModule`|Gateway WebSocket para CU-01|`LeaderboardModule`, `CatalogoModule`|
-|S-INGE|`IngestionModule`|`HyperliquidConnector` (adapter), publicación de eventos|`SharedKernelModule`|
-|S-LEAD|`LeaderboardModule`|Servicios de aplicación + handler de `OperacionRecibida`|`CatalogoModule` *(para resolver nombres)*, `SharedKernelModule`|
-|S-CATA|`CatalogoModule`|Servicios CRUD entidades/direcciones, repositorio Postgres|`SharedKernelModule`|
-|S-ALER|`AlertasModule`|Servicios CRUD alertas, repositorio Postgres|`NotificacionModule` *(validar webhook)*, `SharedKernelModule`|
-|S-EVAL|`EvaluacionModule`|Handler de `PrecioActualizado`, evaluación, emisión de `AlertaDisparada`|`AlertasModule`, `SharedKernelModule`|
-|S-NOTI|`NotificacionModule`|Handler de `AlertaDisparada`, conector webhook, política de reintentos|`AlertasModule`, `SharedKernelModule`|
-|*Compartido*|`SharedKernelModule`|`EventEmitter2`, configuración, logging, conexión a BD|—|
+|`PublicWsAdapter`|Activo|WebSocket público `wss://api.hyperliquid.xyz/ws` + REST `/info`|`HYPERLIQUID_SOURCE=public-ws`|
+|`NanorethRpcAdapter`|Esqueleto (no funcional)|JSON-RPC contra un nodo no validador local|`HYPERLIQUID_SOURCE=nanoreth`|
 
 </div>
 
+La elección se realiza por configuración en `createHyperliquidSource()` (`app/src/sources/index.ts`). Materializa **RS-08** (sustituibilidad de la fuente de datos) sin que ningún otro punto del sistema necesite enterarse del cambio.
+
+### Vista de capas
+
 <div align=center>
 
-![Módulos NestJS y dependencias](../../imagenes/capitulo3/diseno-modulos.svg)
+![Vista de capas](../../imagenes/capitulo3/diseno-capas.svg)
 
 </div>
 
-### Reglas de modularización
+## Selección tecnológica
+
+Cada decisión técnica responde a uno o varios requisitos suplementarios.
+
+### Runtime y lenguaje
 
 <div align=center>
 
-|Regla|Justificación|
-|-|-|
-|Cada módulo expone solo los **servicios de aplicación** (puertos de entrada). Los repositorios y adaptadores se mantienen privados al módulo|Encapsulación: un módulo cliente nunca toca el repositorio de otro módulo. Si lo necesita, abre un puerto de entrada nuevo|
-|Las dependencias entre módulos siguen el grafo del análisis. Un ciclo en el grafo de módulos NestJS es un fallo de diseño|Aciclicidad ya validada en el [Análisis de paquetes](analisisPaquetes.md)|
-|`SharedKernelModule` es global (`@Global()`). Cualquier módulo puede inyectar de él sin importarlo|Evita la importación repetida en todos los módulos de funcionalidades transversales (logger, configuración)|
+|Elemento|Decisión|Justificación|
+|-|-|-|
+|Lenguaje|TypeScript estricto|Tipos compartidos entre back y front; detección temprana de errores; coste de mantenimiento bajo|
+|Runtime|Node.js 20 LTS|Soporte WebSocket nativo, ecosistema maduro, modelo asíncrono basado en `EventEmitter` directamente reutilizable|
 
 </div>
 
-## Refinamiento de los mecanismos arquitectónicos
-
-Los cuatro mecanismos identificados en el análisis se concretan ahora con tecnologías y patrones específicos.
-
-### Mecanismo 1 — Comunicación con sistemas externos
+### Framework HTTP/WS
 
 <div align=center>
 
-|||
-|-|-|
-|**Subsistemas**|S-INGE, S-NOTI|
-|**Patrón**|Adapter (sobre puertos de salida)|
-|**Frontera entrante**|Hyperliquid L1 — protocolo WebSocket sobre la API pública|
-|**Frontera saliente**|Servicio Webhook — protocolo HTTPS POST con cuerpo JSON|
-|**Decisión clave**|El núcleo no conoce *ni* la URL *ni* el protocolo. Recibe los eventos del dominio que el adapter le entrega. El cambio de proveedor (RS-08) es cambiar la clase adapter|
-|**Configuración**|Endpoint, credenciales y timeouts se inyectan vía `@nestjs/config` desde variables de entorno|
-
-</div>
-
-### Mecanismo 2 — Notificación de eventos del dominio
-
-<div align=center>
-
-|||
-|-|-|
-|**Subsistemas**|Todos los del núcleo|
-|**Patrón**|Observer / Pub-Sub (decorador `@OnEvent` de `@nestjs/event-emitter`)|
-|**Topología**|*One-to-many* en proceso. Un productor publica; cero, uno o varios consumidores reaccionan|
-|**Latencia objetivo**|< 1 ms (en proceso, sin serialización ni red)|
-|**Garantía**|*Best effort*. Para los eventos en los que la pérdida es inaceptable (notificaciones), el consumidor persiste el resultado en Postgres antes de confirmar — RS-09|
-
-</div>
-
-### Mecanismo 3 — Persistencia
-
-<div align=center>
-
-|||
-|-|-|
-|**Subsistemas**|S-CATA, S-ALER, S-NOTI (PostgreSQL); S-LEAD (Redis)|
-|**Patrón**|Repository (interfaz en `application/`, implementación TypeORM en `infrastructure/`)|
-|**ORM**|TypeORM 0.3 con migraciones generadas automáticamente|
-|**Transaccionalidad**|Decorador `@Transactional` (paquete `typeorm-transactional`) para los servicios de aplicación que mutan más de una entidad (CU-09 al validar webhook + crear alerta)|
-|**Confidencialidad de webhooks**|RS-10. Las URLs de webhook se almacenan cifradas con `pgp_sym_encrypt` (extensión `pgcrypto` de PostgreSQL) usando una clave maestra de proceso. El campo `url` en BD es `bytea`, no `text`|
-
-</div>
-
-### Mecanismo 4 — Procesamiento concurrente
-
-<div align=center>
-
-|||
-|-|-|
-|**Subsistemas**|Todos|
-|**Modelo de concurrencia**|Single-threaded event loop de Node.js + I/O asíncrono|
-|**Aislamiento entre áreas (RS-05)**|Aprovechamiento del event loop: cada handler es asíncrono y no bloquea. La evaluación de alertas se ejecuta en su propio "tick" sin retener el thread|
-|**Reintentos de notificación (RS-07)**|Cola Redis en lista (`LPUSH` / `BRPOP`) con backoff exponencial. El consumidor de la cola es un servicio de aplicación que reutiliza el mismo `ConectorWebhook`|
-|**Resiliencia (RS-03)**|Health check en `/health` (Terminus). Docker Compose reinicia el contenedor en caso de caída|
-
-</div>
-
-## Vista física preliminar
-
-La vista física consolidada se presenta en el [Diagrama de despliegue](despliegue.md). Aquí se anticipa la división en procesos que cada subsistema ocupará:
-
-<div align=center>
-
-|Proceso|Subsistemas alojados|Tecnología|Razón|
+|Elemento|Decisión|Justificación|RS|
 |-|-|-|-|
-|`backend`|S-PRES, S-INGE, S-LEAD, S-CATA, S-ALER, S-EVAL, S-NOTI|Node 20 + NestJS|Single process: el bus de eventos requiere memoria compartida. Aislar más subsistemas exigiría sustituir el bus por un broker, gasto innecesario para el alcance|
-|`frontend`|*(parte de S-PRES)*|Servidor estático (Nginx) sirviendo el bundle React|Desacopla el ciclo de vida del front del back; redespliegues independientes|
-|`postgres`|*(persistencia de S-CATA, S-ALER, S-NOTI)*|PostgreSQL 16 oficial|Servicio gestionado, datos persistentes en volumen|
-|`redis`|*(estado caliente de S-LEAD, cola de reintentos de S-NOTI)*|Redis 7 oficial|Servicio gestionado, AOF habilitado para recuperar tras reinicio|
+|Framework|**Fastify 5** con `@fastify/cors`, `@fastify/websocket`, `@fastify/static`|Sobrecarga mínima sobre `http` nativo, throughput alto y validación nativa por esquema; encaja con un servidor que mantiene en una misma instancia rutas REST, gateway WebSocket y SPA estático|RS-01, RS-02|
+|Validación de entrada|**Zod** en cada ruta|Esquemas explícitos; mensajes de error coherentes; tipos derivados del esquema|—|
+|Manejo de errores|Filtro global de Fastify que mapea errores de dominio a HTTP|Mantiene el dominio agnóstico al protocolo|RS-05|
 
 </div>
 
-## Justificación cruzada de las decisiones
-
-Cada decisión técnica se rastrea hasta los RS y los CdU que la motivaron y hasta los artefactos de análisis que la prefiguraron.
+### Persistencia transaccional
 
 <div align=center>
 
-|Decisión técnica|Hereda de análisis|Resuelve RS|Habilita CdU|
+|Elemento|Decisión|Justificación|RS|
 |-|-|-|-|
-|Hexagonal + DI|Mecanismo "comunicación con sistemas externos", subsistema S-INGE separado|RS-04, RS-05, RS-08|CU-01, CU-13|
-|Event Bus en proceso|Mecanismo "notificación de eventos del dominio"|RS-04, RS-05|CU-01, CU-13|
-|PostgreSQL + TypeORM|Mecanismo "persistencia"|RS-09, RS-10|CU-02..CU-12|
-|Redis Sorted Set|*LeaderboardEnVivo* como entidad derivada en análisis|RS-01, RS-02|CU-01|
-|WebSocket nativo|Boundary `VistaLeaderboard` con presentación reactiva|RS-01, RS-02|CU-01|
-|`pgcrypto` para webhooks|Tratamiento confidencial mencionado en `Webhook` del modelo de análisis|RS-10|CU-09..CU-12, CU-14|
-|Cola de reintentos en Redis|Mecanismo "procesamiento concurrente"|RS-07, RS-09|CU-14|
-|Docker Compose|Mecanismo "procesamiento concurrente" + RS-03 sobre 24/7|RS-03, RS-08|*Despliegue completo*|
+|RDBMS|**PostgreSQL 16**|Garantías ACID, índices BTREE, `enum`, `pgcrypto`|RS-03, RS-09, RS-10|
+|ORM|**Drizzle ORM + Drizzle Kit**|SQL-first; tipos derivados del esquema; migraciones explícitas; peso mínimo en arranque|—|
+|Cifrado de webhooks|`pgp_sym_encrypt` / `pgp_sym_decrypt` (`pgcrypto`) con clave maestra `APP_SECRET`|La clave vive en el proceso de la aplicación; el cifrado se delega a la base de datos|RS-10|
 
-</div>
+### Estado caliente y reactividad
 
-## Trazabilidad hacia las disciplinas posteriores
+El análisis ya identificó `LeaderboardEnVivo` como entidad **derivada** (reconstruible a partir del flujo). El diseño concreta la decisión:
 
 <div align=center>
 
-|Hacia|Compromiso|
-|-|-|
-|[Diseño de los CdU](disenoCdU.md)|Cada CdU se realiza con clases asignadas a su módulo NestJS, comunicándose por puertos|
-|[Diseño de clases](disenoClases.md)|Cada control de análisis se materializa como un servicio de aplicación con interfaz de puerto|
-|[Diseño de paquetes](disenoPaquetes.md)|La estructura de carpetas refleja exactamente la separación hexagonal y los módulos NestJS|
-|[Modelo de datos](modeloDeDatos.md)|Cada entidad persistente del dominio tiene su tabla; `LeaderboardEnVivo` se modela como Sorted Set Redis|
-|[Diagrama de despliegue](despliegue.md)|Cada proceso del despliegue corresponde a un servicio de Docker Compose|
+|Elemento|Decisión|Justificación|RS|
+|-|-|-|-|
+|`LeaderboardEnVivo`|Estructura **in-memory** en el proceso de aplicación (`LeaderboardState`)|Una sola máquina, sin necesidad de compartir estado entre réplicas; cada terna soporta `O(1)` por trade y `O(n log n)` por snapshot|RS-01, RS-02|
+|Persistencia auxiliar de trades|Tabla `lb_trades` en PostgreSQL alimentada en batch|Cubre ventanas largas (`1d`, `1w`) que no caben en memoria y soporta recuperación tras reinicio sin perder cobertura|RS-03|
+|Bus de eventos|`EventEmitter` nativo de Node envuelto en un tipo `TypedBus<DomainEventMap>` (`app/src/bus.ts`)|Tipado estático sobre eventos del dominio; cero dependencias adicionales|—|
+|Política `at-most-once`|Aceptada para eventos del flujo continuo|Las operaciones y los precios llegan continuamente; un evento perdido se recupera con el siguiente|RS-03|
 
 </div>
+
+### Cola de reintentos
+
+<div align=center>
+
+|Elemento|Decisión|Justificación|RS|
+|-|-|-|-|
+|Backing store|Columna `notificaciones.proximo_intento` con índice `(estado, proximo_intento)`|Cola virtual con persistencia ACID; sin servicios adicionales (cero dependencias de infraestructura extra)|RS-07, RS-09|
+|Worker|`RetryWorker` periódico (`app/src/modules/notificacion/retry.worker.ts`)|Tick configurable (`NOTIFICATION_RETRY_TICK_SECONDS`) que toma las notificaciones cuyo próximo intento ya venció y reintenta|RS-07|
+|Política de backoff|Lista de delays acumulados configurable (`NOTIFICATION_RETRY_BACKOFF_SECONDS`)|`1, 5, 30, 300, 1800, 3600` segundos por defecto; ajustable sin tocar código|RS-07|
+
+</div>
+
+### Frontend
+
+<div align=center>
+
+|Elemento|Decisión|Justificación|RS|
+|-|-|-|-|
+|Build|Vite|Build sub-segundo, soporte nativo de TypeScript y JSX|—|
+|UI|React 19 + Tailwind 4 + shadcn/ui|Tema dark profesional sin frameworks pesados; componentes accesibles|RS-05|
+|Estado de servidor|`@tanstack/react-query` para REST + WebSocket dedicado para el leaderboard|Encaja con el modelo *snapshot + actualizaciones incrementales* del CU-01|RS-01|
+|Gráfico de precios|TradingView `lightweight-charts` consumiendo Hyperliquid directamente|Decisión documentada como soporte visual del CU-01; no introduce CdU nuevo|—|
+
+</div>
+
+## Asignación de subsistemas a módulos
+
+Los subsistemas del análisis se materializan como **módulos del código**, organizados por feature (no por capa) para concentrar todo lo necesario de un CdU en un único directorio:
+
+<div align=center>
+
+|Subsistema|Módulo del código|Capa principal|
+|-|-|-|
+|S-PRES (back)|`app/src/modules/*/*.routes.ts`, `app/src/modules/leaderboard/leaderboard.ws.ts`|Presentación|
+|S-PRES (front)|`web/src/pages/`, `web/src/features/`|Presentación|
+|S-INGE|`app/src/sources/` *(adaptadores)* + parte del composition root en `server.ts` *(traducción de `allMids` a `PrecioActualizado`)*|Infraestructura|
+|S-LEAD|`app/src/modules/leaderboard/`|Aplicación + estado|
+|S-CATA|`app/src/modules/catalogo/`, `app/src/modules/meta/`|Aplicación|
+|S-ALER|`app/src/modules/alertas/`|Aplicación|
+|S-EVAL|`app/src/modules/evaluacion/`|Aplicación|
+|S-NOTI|`app/src/modules/notificacion/`|Aplicación + infraestructura (`WebhookConnector`)|
+
+</div>
+
+> El detalle de la estructura de directorios — qué archivo concreto vive en cada módulo — se desarrolla en el [diseño de paquetes](disenoPaquetes.md).
+
+<div align=center>
+
+![Mapa de módulos del backend](../../imagenes/capitulo3/diseno-modulos.svg)
+
+</div>
+
+## Mecanismos de comunicación
+
+### Entre el cliente y el sistema
+
+<div align=center>
+
+|Mecanismo|Uso|Justificación|
+|-|-|-|
+|HTTP REST (Fastify)|CRUD de entidades, direcciones, alertas; consultas puntuales|Idempotencia y trazabilidad de cada operación|
+|WebSocket (Fastify)|Leaderboard reactivo (CU-01)|Empuje desde el servidor sin polling; coste de conexión amortizado durante toda la sesión|
+
+</div>
+
+El frontend usa **una única conexión WS** al backend para el leaderboard y la franja superior de precios (`PriceTicker`), gestionada centralmente por `AppDataContext` (`web/src/core/AppDataContext.tsx`).
+
+### Entre subsistemas dentro del proceso
+
+Bus de eventos tipado (`app/src/bus.ts`). Productores y consumidores se ignoran mutuamente; el bus media la comunicación.
+
+<div align=center>
+
+|Evento|Productor|Consumidor(es)|
+|-|-|-|
+|`OperacionRecibida`|`PublicWsAdapter` *(vía `LeaderboardService`)*|`LeaderboardService` *(agrega a `LeaderboardState`)*|
+|`PrecioActualizado`|Composition root *(traducción de `allMids`)*|`wireEvaluacion` *(evaluador de alertas)*|
+|`LeaderboardActualizado`|`LeaderboardService`|`LeaderboardGateway` *(reenvía al cliente)*|
+|`AlertaDisparada`|`wireEvaluacion`|`NotificacionService` *(directo)*; logging|
+|`NotificacionConfirmada`|`NotificacionService`|Logging / observabilidad|
+|`NotificacionFallida`|`NotificacionService`|Logging / observabilidad|
+
+</div>
+
+Los eventos llevan en el payload únicamente identificadores y datos del dominio (sin DTOs HTTP, sin filas de BD), lo que aísla a los suscriptores de detalles de capa.
+
+<div align=center>
+
+![Bus de eventos del dominio](../../imagenes/capitulo3/diseno-eventos.svg)
+
+</div>
+
+### Con el exterior
+
+<div align=center>
+
+|Frontera|Protocolo|Adaptador|
+|-|-|-|
+|Hyperliquid L1 — flujo continuo|WebSocket público `wss://api.hyperliquid.xyz/ws`|`PublicWsAdapter`|
+|Hyperliquid L1 — consultas puntuales|REST `POST /info`|`PublicWsAdapter` *(reutilizando el mismo cliente)*|
+|Servicio Webhook|HTTP POST con cuerpo JSON; timeout de 10 s|`WebhookConnector`|
+
+</div>
+
+## Trazabilidad de los requisitos suplementarios
+
+<div align=center>
+
+|Requisito|Decisión arquitectónica|Verificable en|
+|-|-|-|
+|**RS-01** ≤ 1 s en leaderboard|Pipeline directo `PublicWsAdapter → LeaderboardService → LeaderboardState → WS` sin pasar por BD|`leaderboard.service.ts`, `leaderboard.ws.ts`|
+|**RS-02** ≤ 2 s en evaluación|Suscripción a `PrecioActualizado` + índice `(token, estado)` en `alertas`|`evaluacion.subscriber.ts`, migración `0000_init.sql`|
+|**RS-03** 24/7|Proceso Node único + Postgres durable; estado caliente reconstruible|Configuración Docker Compose|
+|**RS-04** Extensibilidad|Nuevos consumidores se suscriben al bus; nuevos tipos de alerta implementan una función de evaluación|`bus.ts`, `evaluator.ts`|
+|**RS-05** Áreas independientes|Frontend con tres rutas independientes; backend con módulos sin dependencia cruzada salvo a través del bus|`web/src/App.tsx`|
+|**RS-06** Mercados distinguidos|`Mercado` como tipo de primer orden; índices y validaciones lo incluyen|`domain/types.ts`, schemas Drizzle|
+|**RS-07** Reintentos|`RetryWorker` + columna `proximo_intento`|`retry.worker.ts`|
+|**RS-08** Sustituibilidad de la fuente|Puerto `IHyperliquidSource` + adaptadores|`sources/`|
+|**RS-09** Trazabilidad|Tabla `notificaciones` con `alerta_id`, `precio_disparador`, `instante_emision`|`schema/notificaciones.ts`|
+|**RS-10** Seguridad del webhook|`pgcrypto` + `APP_SECRET`|`persistence/crypto.ts`, `schema/alertas.ts`|
+
+</div>
+
+## Vista de despliegue
+
+Detallada en el [documento de despliegue](despliegue.md). En resumen, dos servicios sobre Docker Compose:
+
+- `app`: contenedor con el backend Fastify y el SPA compilado servido desde `/public`.
+- `postgres`: PostgreSQL 16 con extensión `pgcrypto`.
+
+Esta topología minimiza la superficie operativa (RS-03) sin sacrificar las garantías que los requisitos exigen.
+
+## Cambios respecto al análisis
+
+El [análisis de la arquitectura](analisisArquitectura.md) identificó siete subsistemas y cuatro mecanismos transversales. El diseño los mantiene íntegramente y añade:
+
+<div align=center>
+
+|Adición de diseño|Subsistema impactado|Razón|
+|-|-|-|
+|Puerto explícito `IHyperliquidSource`|S-INGE|Materializa RS-08 con una interfaz formal|
+|Tabla `lb_trades` para histórico de trades|S-LEAD|Permite ventanas largas (`1d`, `1w`) sin saturar la memoria|
+|`MetaService` (catálogo de Hyperliquid)|S-CATA *(extendido)*|Resolución `display token ↔ feedCoin ↔ midsKey`; necesaria porque la L1 usa identificadores distintos al display del usuario|
+|`AddressDetailService` (flujo alternativo de CU-07)|S-CATA|Soporta la vista de detalle global de una dirección descrita en el detalle de CU-07|
+|`TradePersistence` con flush en batch|S-LEAD|Independiza el ritmo del WS de Hyperliquid del ritmo de INSERT en Postgres|
+
+</div>
+
+Ninguna adición introduce un caso de uso nuevo: todas son refinamientos de los CdU ya existentes.

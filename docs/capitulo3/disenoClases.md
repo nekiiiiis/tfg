@@ -1,282 +1,339 @@
 # Diseño de clases
 
-## Propósito
-
-El diseño de clases refina el [Análisis de clases](analisisClases.md) hasta el nivel necesario para que la implementación del Capítulo 4 sea un refinamiento mecánico del diseño. Cada clase de análisis se materializa en una o varias clases de diseño con **responsabilidades, firmas tipadas, estereotipos y dependencias** explícitas, organizadas según la arquitectura hexagonal fijada en el [Diseño de la arquitectura](disenoArquitectura.md). El diseño no incluye cuerpos de método: el cuerpo es la implementación.
-
-<div align=center>
-
-|||
-|-|-|
-|**Punto de partida**|Clases de análisis (boundary/control/entity), arquitectura hexagonal y módulos NestJS del [Diseño de la arquitectura](disenoArquitectura.md)|
-|**Resultado**|Catálogo de clases de diseño por módulo y por capa hexagonal, con interfaces de puerto, servicios de aplicación, repositorios, adaptadores, DTOs y mappers|
-|**Restricción**|Cada clase de diseño nombra el rol de análisis del que procede; cada interfaz de puerto refleja una operación del control de análisis|
-
-</div>
+Refina cada clase del [análisis de clases](analisisClases.md) en una o varias **clases de diseño** con responsabilidades, firmas y dependencias concretas. Las firmas se documentan sin cuerpos: la implementación se construye sobre estas clases en la disciplina posterior.
 
 ## Convenciones
 
 <div align=center>
 
-|Convención|Aplicación|
+|Aspecto|Convención|
 |-|-|
-|**Nomenclatura**|Servicios de aplicación: `XxxService`. Puertos de entrada: `IXxxService` o `IXxxQueryService` (segregados por cliente, ISP). Repositorios: `IXxxRepository`. Adaptadores externos: `XxxConnector`. DTOs: `CrearXxxDto`, `XxxResponseDto`. Eventos: nombres en pasado (`AlertaDisparada`, `PrecioActualizado`)|
-|**Estereotipos UML**|`<<service>>`, `<<repo>>`, `<<adapter>>`, `<<controller>>`, `<<gateway>>`, `<<dto>>`, `<<mapper>>`, `<<entity>>`, `<<value>>`, `<<port-in>>`, `<<port-out>>`|
-|**Visibilidad**|Repositorios y adaptadores se mantienen privados al módulo. Solo los puertos de entrada se exportan|
-|**Inmutabilidad**|DTOs y eventos son inmutables. Las entidades del dominio mutan únicamente a través de métodos que respetan invariantes|
-|**Errores**|Excepciones del dominio extienden una clase abstracta `DomainException`. La traducción a códigos HTTP se aísla en un filtro de la capa de presentación|
-|**Tipado del dominio**|Se usan *value objects* (`Address`, `TokenSymbol`, `Volume`, `Webhook`, `Umbral`) en lugar de tipos primitivos cuando el tipo aporta restricciones del dominio|
+|Nomenclatura|Servicios de aplicación: `XxxService`. Adaptadores externos: `XxxAdapter` (puerto HL) o `XxxConnector` (webhook). Gateways HTTP: función `register*Routes`. Gateway WS: función `register*Gateway`. Eventos: nombres en pasado (`AlertaDisparada`, `PrecioActualizado`).|
+|Estereotipos técnicos|`<<service>>`, `<<adapter>>`, `<<gateway>>`, `<<handler>>`, `<<repo>>` (acceso Drizzle integrado en servicios), `<<port>>` (interfaz)|
+|Estilo|TypeScript estricto. Las interfaces de puerto son tipos en TS, no clases. Los DTOs se materializan como esquemas Zod con `infer` para los tipos.|
+|Inyección de dependencias|Por constructor. Sin contenedor de IoC: el composition root (`server.ts`) realiza el cableado manual.|
 
 </div>
 
----
+## Capa de dominio
 
-## Capa de dominio (`domain/`)
-
-Independiente de cualquier framework. Aloja únicamente entidades del dominio, objetos valor, eventos del dominio y excepciones del dominio.
-
-### Entidades del dominio
-
-Cada entidad del [Modelo del dominio](../capitulo2/modeloDelDominio.md) se materializa con sus invariantes encapsuladas en el constructor y métodos que mantienen la consistencia. Las máquinas de estado identificadas en el Capítulo 2 (`AlertaPrecio`, `Notificacion`) se implementan con un método de transición que valida la matriz de transiciones permitidas.
+La capa de dominio agrupa los tipos, eventos y errores sin dependencias externas. Materializa el modelo del dominio del sistema.
 
 <div align=center>
 
-|Entidad|Atributos|Operaciones|Invariantes|
-|-|-|-|-|
-|`Entidad`|`id`, `nombre`, `direcciones`|`cambiarNombre`, `añadirDireccion`, `eliminarDireccion`|Nombre único, no vacío; al menos una dirección|
-|`Direccion`|`id`, `valor`, `entidad`|—|Formato `0x[a-f0-9]{40}`; pertenece a una sola entidad|
-|`AlertaPrecio`|`id`, `token`, `umbral`, `webhook`, `estado`|`evaluar`, `marcarDisparada`, `rearmar`, `marcarFallida`|Transiciones de estado restringidas (cf. *Diagrama de estados* del Cap. 2)|
-|`Notificacion`|`id`, `alerta`, `precioDisparador`, `instanteEmision`, `estadoEntrega`|`marcarEntregada`, `marcarFallida`|Transiciones del estado de entrega|
-
-</div>
-
-### Objetos valor
-
-<div align=center>
-
-|Clase|Encapsula|Invariantes|
+|Clase / tipo|Naturaleza|Responsabilidad|
 |-|-|-|
-|`EntidadId`, `AlertaId`, `DireccionId`, `NotificacionId`|UUID|Formato UUID v4 válido|
-|`NombreEntidad`|texto|Longitud 1..64, sin caracteres de control|
-|`TokenSymbol`|texto|`[A-Z0-9-]{1,16}`|
-|`Address`|texto|Hexadecimal `0x[a-f0-9]{40}`|
-|`Volume`|entero grande|Positivo, ≤ 10²⁴|
-|`Precio`|`{valor, instante, token}`|`valor > 0`, `instante` no futuro|
-|`Umbral`|`{cruce, valor}`|`cruce ∈ {SUBE, BAJA}`, `valor > 0`|
-|`Webhook`|URL|HTTPS obligatorio (RS-10), longitud ≤ 2048|
+|`Mercado`, `Token`, `Direccion`, `Operacion`, `Precio`|Tipos del dominio|Reflejan el MdD; sin métodos|
+|`Terna`|Value object|Combinación `(mercado, token, temporalidad)` que identifica una vista del leaderboard|
+|`Umbral`|Value object|`{ cruce, valor }`; función pura `evaluarUmbral(umbral, precio): boolean` aplicada por la evaluación|
+|`AlertaPrecio`|Tipo del dominio|Atributos + estado del ciclo de vida (`OPERATIVA`, `DISPARADA`, `NOTIFICACION_FALLIDA`)|
+|`Notificacion`|Tipo del dominio|Atributos + estado del ciclo de entrega (`PENDIENTE`, `ENTREGADA`, `FALLIDA`)|
+|`DomainEventMap`|Tipo|Mapa nombre→payload de los seis eventos del dominio|
+|`DomainError`|Clase base|Errores con `code` y `status` HTTP; especializaciones: `EntidadNoEncontrada`, `AlertaNoEncontrada`, `WebhookInvalido`, etc.|
+|`esAddressValida(s)`|Función pura|Validación de formato `0x[a-f0-9]{40}`|
+|`esTokenValido(s)`|Función pura|Validación de las tres formas: perp (`BTC.p`), spot (`HYPE/USDC`), HIP-3 (`dex:SYMBOL`)|
 
 </div>
 
-### Eventos del dominio
+## Capa de aplicación (servicios)
 
-Todos los eventos heredan de una clase abstracta `DomainEvent` con `eventName` y `ocurridoEn`. Son inmutables.
+Un servicio por subsistema del análisis. Cada uno depende de tipos del dominio y, opcionalmente, de adaptadores hacia el exterior.
 
-<div align=center>
-
-|Evento|Productor|Carga útil|
-|-|-|-|
-|`OperacionRecibida`|`HyperliquidConnector`|`Operacion`|
-|`PrecioActualizado`|`HyperliquidConnector`|`Token`, `Precio`|
-|`AlertaDisparada`|`PriceUpdateHandler`|`AlertaId`, `Precio`|
-|`NotificacionConfirmada`|`NotificacionService`|`NotificacionId`|
-|`NotificacionFallida`|`NotificacionService`|`NotificacionId`, motivo|
-
-</div>
-
-### Excepciones del dominio
-
-`DomainException` (abstracta) es la raíz. Las subclases concretas son `EntidadDuplicadaException`, `DireccionYaAsignadaException`, `WebhookInaccesibleException`, `TransicionEstadoNoPermitida`, `AlertaNoEncontrada`, etc.
-
----
-
-## Capa de aplicación (`application/`)
-
-Define los **puertos** y aloja los **servicios de aplicación** que realizan los CdU. No conoce TypeORM, ioredis ni HTTP.
-
-### Puertos de entrada
-
-Cada control del análisis se traduce en una interfaz de puerto. Los controllers REST y los gateways WS dependen de la interfaz, nunca de la implementación.
+### S-LEAD — `LeaderboardService`
 
 <div align=center>
 
-|Puerto de entrada|Operaciones expuestas|Cliente|
-|-|-|-|
-|`IAlertasService`|`crear`, `listar`, `editar`, `eliminar`|`AlertasController`|
-|`IAlertasQueryService`|`recuperarOperativasPara`|`PriceUpdateHandler` *(ISP)*|
-|`ICatalogoService`|`crearEntidad`, `listarEntidades`, `editarEntidad`, `eliminarEntidad`, `añadirDireccion`, `listarDirecciones`, `eliminarDireccion`|`EntidadesController`, `DireccionesController`|
-|`ICatalogoQueryService`|`resolverNombre`, `existeToken`|`LeaderboardService`, `AlertasService` *(ISP)*|
-|`ILeaderboardService`|`obtenerSnapshot`, `suscribir`|`LeaderboardGateway`|
-|`INotificacionService`|`enviar`|`AlertTriggeredHandler`|
-
-</div>
-
-> La aplicación del Principio de Segregación de Interfaces se materializa en parejas `IXxxService` / `IXxxQueryService`: el cliente solo depende del subconjunto de operaciones que usa.
-
-### Puertos de salida
-
-Definen lo que la aplicación **necesita** del exterior. La implementación reside en `infrastructure/`.
-
-<div align=center>
-
-|Puerto de salida|Operaciones requeridas|Implementación|
-|-|-|-|
-|`IAlertasRepository`|`save`, `findById`, `findOperativasPorToken`, `delete`|`AlertasRepositoryTypeOrm`|
-|`IEntidadesRepository`, `IDireccionesRepository`|CRUD sobre la entidad correspondiente|`*RepositoryTypeOrm`|
-|`INotificacionesRepository`|`save`, `findPendientes`, `actualizarEstado`|`NotificacionesRepositoryTypeOrm`|
-|`ILeaderboardSnapshotRepository`|`añadirOperacion`, `obtenerTopN`, `purgarVentana`|`LeaderboardSnapshotRepositoryRedis`|
-|`IHyperliquidPort`|`suscribir`, `desuscribir`|`HyperliquidConnector`|
-|`IWebhookConnector`|`checkReachability`, `transmitir`|`WebhookConnectorHttp`|
-|`IRetryQueue`|`enqueue`, `consume`|`RetryQueueRedis`|
-|`IEventBus`|`emit`, `on`|`EventBusAdapter`|
-
-</div>
-
-### Servicios de aplicación
-
-Cada servicio implementa uno o varios puertos de entrada y orquesta la realización del CdU; inyecta los puertos de salida que necesita. El cuerpo de cada operación se concretará en el Capítulo 4 — el diseño fija únicamente la firma, las dependencias y la transaccionalidad.
-
-<div align=center>
-
-|Servicio|Implementa|Inyecta|Transaccionalidad|
-|-|-|-|-|
-|`AlertasService`|`IAlertasService`|`IAlertasRepository`, `ICatalogoQueryService`, `IWebhookConnector`, `IEventBus`|`@Transactional` en `crear`, `editar`, `eliminar`|
-|`CatalogoService`|`ICatalogoService`, `ICatalogoQueryService`|`IEntidadesRepository`, `IDireccionesRepository`, `IEventBus`|`@Transactional` en operaciones multi-entidad (alta entidad + direcciones iniciales)|
-|`LeaderboardService`|`ILeaderboardService`|`ILeaderboardSnapshotRepository`, `ICatalogoQueryService`, `IHyperliquidPort`|—|
-|`NotificacionService`|`INotificacionService`|`INotificacionesRepository`, `IWebhookConnector`, `IRetryQueue`, `IAlertasService`, `IEventBus`|`@Transactional` en `enviar` (persiste la `Notificacion` antes de transmitir, RS-09)|
-|`PriceUpdateHandler`|—|`IAlertasQueryService`, `AlertEvaluator`, `IEventBus`|`@OnEvent('PrecioActualizado')`|
-|`AlertTriggeredHandler`|—|`INotificacionService`|`@OnEvent('AlertaDisparada')`|
-|`OperationIngestionHandler`|—|`ILeaderboardSnapshotRepository`, `IEventBus`|`@OnEvent('OperacionRecibida')`|
-|`AlertEvaluator`|—|*(ninguna — estrategia pura)*|—|
-|`RetryWorker`|—|`IRetryQueue`, `INotificacionService`|*(consumidor bloqueante)*|
-
-</div>
-
-### DTOs y mappers
-
-Cada borde del sistema cruza con un DTO inmutable. Los mappers traducen entre DTOs ↔ entidades del dominio. **No se exponen entidades del dominio sobre HTTP** — esa es una regla del diseño que el código del Capítulo 4 deberá respetar.
-
-<div align=center>
-
-|DTO|Sentido|Validación|Notas|
-|-|-|-|-|
-|`CrearAlertaDto`|Entrada|`token` formato `[A-Z0-9-]{1,16}`, `umbral > 0`, `cruce ∈ {SUBE,BAJA}`, `webhook` URL HTTPS|—|
-|`EditarAlertaDto`|Entrada|Campos opcionales con las mismas reglas|—|
-|`AlertaResponseDto`|Salida|—|**Nunca** incluye la URL del webhook (RS-10); sí incluye `webhookAlcanzable`|
-|`CrearEntidadDto`, `EditarEntidadDto`, `EntidadResponseDto`|—|Nombre 1..64, sin caracteres de control|—|
-|`CrearDireccionDto`, `DireccionResponseDto`|—|Formato hex `0x...`|—|
-|`ConsultaLeaderboardDto`|Entrada (WS)|`mercado`, `token`, `temporalidad` válidos|—|
-|`FilaLeaderboardDto`|Salida (WS)|—|Incluye `direccion`, `nombreResuelto?`, `volumenCompra`, `volumenVenta`|
-
-</div>
-
-Los mappers correspondientes (`AlertaPrecioMapper`, `EntidadMapper`, `NotificacionMapper`, …) son clases sin estado con métodos `fromDto`/`toResponse` o `fromOrm`/`toOrm`.
-
----
-
-## Capa de infraestructura (`infrastructure/`)
-
-Implementa los puertos de salida. El núcleo no conoce esta capa.
-
-### Adaptadores de persistencia
-
-<div align=center>
-
-|Adaptador|Implementa|Tecnología|Notas|
-|-|-|-|-|
-|`AlertasRepositoryTypeOrm`|`IAlertasRepository`|TypeORM sobre PostgreSQL|Trabaja con `AlertaOrmEntity` y traduce vía `AlertaOrmMapper`|
-|`EntidadesRepositoryTypeOrm`, `DireccionesRepositoryTypeOrm`|`IEntidadesRepository`, `IDireccionesRepository`|TypeORM|—|
-|`NotificacionesRepositoryTypeOrm`|`INotificacionesRepository`|TypeORM|—|
-|`LeaderboardSnapshotRepositoryRedis`|`ILeaderboardSnapshotRepository`|ioredis sobre Redis 7 (Sorted Set)|Esquema de claves en [Modelo de datos](modeloDeDatos.md)|
-|`RetryQueueRedis`|`IRetryQueue`|ioredis sobre Redis 7 (List, `LPUSH`/`BRPOP`)|Backoff exponencial gestionado por `RetryWorker`|
-
-</div>
-
-> Las clases ORM (`AlertaOrmEntity`, etc.) son distintas de las entidades del dominio: llevan los decoradores de mapeo y se mantienen exclusivamente en `infrastructure/`. Los mappers ORM (`AlertaOrmMapper`, …) traducen en ambos sentidos. La entidad del dominio queda libre de tecnología.
-
-### Adaptadores de sistemas externos
-
-<div align=center>
-
-|Adaptador|Implementa|Protocolo|Función|
-|-|-|-|-|
-|`HyperliquidConnector`|`IHyperliquidPort`|WebSocket|Mantiene la conexión con Hyperliquid L1 y publica `OperacionRecibida` y `PrecioActualizado` en el bus. **Único punto del sistema que conoce el protocolo**: sustituirlo por un adaptador para nodo no validador (RS-08) es cambiar la implementación inyectada|
-|`WebhookConnectorHttp`|`IWebhookConnector`|HTTPS POST/HEAD|Comprueba alcanzabilidad y transmite notificaciones al webhook receptor. Cifrado/descifrado de la URL ocurre exclusivamente al traspasar la frontera (RS-10)|
-|`HyperliquidMessageParser`|—|—|Parser puro de los mensajes de Hyperliquid; testeable sin red|
-
-</div>
-
----
-
-## Capa de presentación (`presentation/`)
-
-### Controladores REST y gateways WebSocket
-
-<div align=center>
-
-|Clase|Estereotipo|Tipo de adaptador|Operaciones expuestas|Depende de|
-|-|-|-|-|-|
-|`AlertasController`|`<<controller>>`|REST `/alertas`|`POST`, `GET`, `PATCH`, `DELETE`|`IAlertasService`|
-|`EntidadesController`|`<<controller>>`|REST `/entidades`|CRUD|`ICatalogoService`|
-|`DireccionesController`|`<<controller>>`|REST `/entidades/:id/direcciones`|`POST`, `GET`, `DELETE`|`ICatalogoService`|
-|`LeaderboardGateway`|`<<gateway>>`|WS `/ws/leaderboard`|`subscribe-leaderboard`, `unsubscribe-leaderboard`; reenvía `LeaderboardActualizado`|`ILeaderboardService`, `EventBus`|
-|`DomainExceptionFilter`|`<<filter>>`|—|Traduce `DomainException` a códigos HTTP (404, 409, 422)|—|
-
-</div>
-
-> Los controladores reciben DTOs validados estructuralmente por el framework de validación; las reglas de negocio se validan en los servicios de aplicación (separación que se hereda del [Diseño de los CdU](disenoCdU.md)).
-
----
-
-## Aplicación de los principios SOLID
-
-<div align=center>
-
-|Principio|Manifestación en el diseño|
+|Atributo|Tipo / valor|
 |-|-|
-|**S**RP — Single Responsibility|Cada clase tiene un propósito (crear alertas, evaluar precios, persistir, transmitir). `AlertasService` no conoce HTTP; `AlertasController` no conoce TypeORM|
-|**O**CP — Open/Closed|Añadir un nuevo tipo de alerta requiere implementar `IEvaluadorAlerta` y registrarlo en el contenedor; no se modifican `PriceUpdateHandler` ni `AlertEvaluator` existentes|
-|**L**SP — Liskov Substitution|`HyperliquidConnector` y un futuro `NodoNoValidadorConnector` cumplen `IHyperliquidPort`; sustituir uno por otro no rompe a `IngestionModule`|
-|**I**SP — Interface Segregation|`ICatalogoService` (cliente: presentación) e `ICatalogoQueryService` (cliente: leaderboard, alertas) son interfaces distintas, aunque las implemente el mismo servicio. Análogo `IAlertasService` / `IAlertasQueryService`|
-|**D**IP — Dependency Inversion|Todas las capas hacia adentro dependen de interfaces, no de implementaciones. La inyección se resuelve en los `@Module` con providers `{ provide: 'IXxx', useClass: XxxImpl }`|
+|Estereotipo|`<<service>>`|
+|Constructor|`(source: IHyperliquidSource, meta: MetaService, windowSeconds, maxOpsPerTerna, policy, persistence?: TradePersistence)`|
+|Estado|`channels: Map<string, TokenChannel>`, `ternasRefcount`, `state: LeaderboardState`|
+|Operaciones públicas|`subscribe(terna, opts): { snapshot, unsubscribe }`, `snapshot(terna, topN, lado)`, `close()`|
+|Responsabilidades|Apertura/cierre de canales por par; ingestión WS + polling REST adaptativo con dedupe por `tid`; emisión de `LeaderboardActualizado`|
 
 </div>
 
-## Patrones de diseño aplicados
+### S-LEAD — `LeaderboardState`
 
 <div align=center>
 
-|Patrón|Dónde|Razón|
+|Atributo|Tipo / valor|
+|-|-|
+|Estereotipo|*(estructura de aplicación)*|
+|Constructor|`(windowSecondsByTemp, maxOps)`|
+|Operaciones|`ingest(terna, op)`, `ingestBackfill(terna, ops[])`, `snapshot(terna, topN, lado)`, `ensureTerna(terna)`|
+|Garantías|Mantiene una ventana deslizante por terna con cap de operaciones; `O(1)` por trade, `O(k log k)` por snapshot (`k`= direcciones)|
+
+</div>
+
+### S-LEAD — `TradePersistence`
+
+<div align=center>
+
+|Atributo|Tipo / valor|
+|-|-|
+|Estereotipo|`<<service>>` + `<<repo>>`|
+|Constructor|`(sql, opts?: { flushBatchSize, flushIntervalMs, retentionDays, cleanupIntervalMs, enabled })`|
+|Operaciones|`enqueue(op)`, `enqueueMany(ops)`, `flush()`, `getHistorical(mercado, token, sinceMs, untilMs?)`, `cleanup()`, `start()`, `stop()`|
+|Responsabilidades|Buffer en memoria, flush a `lb_trades` con `ON CONFLICT (tid) DO NOTHING`, cleanup periódico de trades por encima de la retención|
+
+</div>
+
+### S-CATA — `MetaService`
+
+<div align=center>
+
+|Atributo|Tipo / valor|
+|-|-|
+|Estereotipo|`<<service>>`|
+|Constructor|`(opts: { infoUrl, ttlMs?, minIntervalMs?, refreshCooldownMs?, maxRetries? })`|
+|Estado|Catálogo cacheado (`tokens`, `dexs`, índices por `id`, `feedCoin` y `midsKey`)|
+|Operaciones|`getCatalog()`, `refresh()`, `listTokens(mercado?)`, `resolveToken(mercado, displayToken)`, `resolveByFeedCoin(feedCoin)`, `resolveByMidsKey(midsKey)`, `getMidsKeyToDisplay()`, `getCandles(...)`, `getTopVolume(...)`|
+|Responsabilidades|Resolver identificadores entre display, feed y mids; cachear el catálogo con TTL y cooldown; obtener velas y top de volumen|
+
+</div>
+
+### S-CATA — `CatalogoService`
+
+<div align=center>
+
+|Atributo|Tipo / valor|
+|-|-|
+|Estereotipo|`<<service>>` + `<<repo>>`|
+|Constructor|`(db: DB)`|
+|Operaciones|`crearEntidad(nombre)`, `listarEntidades(filtro?)`, `renombrarEntidad(id, nombre)`, `eliminarEntidad(id)`, `aniadirDireccion(entidadId, valor)`, `listarDirecciones(entidadId)`, `eliminarDireccion(direccionId)`, `resolverDirecciones(addrs[])`|
+|Responsabilidades|CRUD de `entidades` y `direcciones`; resolución por lote para el leaderboard|
+
+</div>
+
+### S-CATA — `AddressDetailService`
+
+<div align=center>
+
+|Atributo|Tipo / valor|
+|-|-|
+|Estereotipo|`<<service>>`|
+|Constructor|`(source: IHyperliquidSource, meta: MetaService, getMid: (midsKey: string) => number \| undefined)`|
+|Operaciones|`getSpot(address)`, `getPerps(address)`, `getStaking(address)`, `getFills(address)`|
+|Responsabilidades|Recuperar las cuatro vistas del detalle global de una dirección desde HL y enriquecerlas con metadatos|
+
+</div>
+
+### S-ALER — `AlertasService`
+
+<div align=center>
+
+|Atributo|Tipo / valor|
+|-|-|
+|Estereotipo|`<<service>>` + `<<repo>>`|
+|Constructor|`(db: DB, webhook: WebhookConnector)`|
+|Operaciones|`crear(input)`, `listar(filtro?)`, `actualizar(id, cambios)`, `eliminar(id)`, `recuperarOperativasPorToken(token)`, `marcarComoDisparada(id)`|
+|Responsabilidades|CRUD de `alertas`; cifrado/descifrado de la URL del webhook con `pgcrypto`; consulta indexada por `(token_simbolo, estado)` para CU-13|
+
+</div>
+
+### S-EVAL — `wireEvaluacion` y `evaluarAlertasContraPrecio`
+
+<div align=center>
+
+|Artefacto|Naturaleza|Responsabilidad|
 |-|-|-|
-|**Repository**|`IAlertasRepository`, `IEntidadesRepository`, `ILeaderboardSnapshotRepository`|Encapsular acceso a la persistencia detrás de una interfaz del dominio|
-|**Adapter**|`HyperliquidConnector`, `WebhookConnectorHttp`, `LeaderboardSnapshotRepositoryRedis`|Aislar el núcleo del protocolo concreto del exterior|
-|**Strategy**|`AlertEvaluator` con futuras subclases por tipo de alerta|Permitir nuevos tipos de alerta sin tocar el handler|
-|**Observer / Pub-Sub**|Subscripciones declarativas de eventos sobre el bus|Desacoplar productores y consumidores|
-|**Template Method**|`DomainEvent` (base) con `eventName` abstracto|Estandarizar la forma de los eventos del dominio|
-|**Command**|`CrearAlertaDto`, `EditarAlertaDto`|Encapsular la solicitud junto con sus parámetros, validable y serializable|
-|**DTO + Mapper**|En cada borde del sistema|Evitar fugas del modelo de dominio hacia HTTP, BD o eventos|
-|**Specification**|`Umbral.evaluar(precio): boolean`|Encapsular la regla del umbral como objeto del dominio|
+|`wireEvaluacion(db, notificaciones)`|Función `<<handler>>`|Suscriptor del bus para `PrecioActualizado`. Recupera alertas operativas, llama al evaluador, actualiza estado y delega CU-14|
+|`evaluarAlertasContraPrecio(alertas, precio)`|Función pura|Aplica `evaluarUmbral` (dominio) a cada alerta; devuelve los IDs disparados|
 
 </div>
 
-## Diagrama de clases por módulo
+> El análisis identificó `GestorEvaluacionAlertas` como **clase de control**. En diseño se materializa como una **función de cableado** + una **función de predicado puro**. El refinamiento es coherente con SRP y con la naturaleza reactiva del CdU (no hay estado mutable propio del evaluador).
 
-### Módulo `AlertasModule`
+### S-NOTI — `NotificacionService`
 
 <div align=center>
 
-![Clases de diseño — AlertasModule](../../imagenes/capitulo3/diseno-clases-alertas.svg)
+|Atributo|Tipo / valor|
+|-|-|
+|Estereotipo|`<<service>>` + `<<repo>>`|
+|Constructor|`(db: DB, webhook: WebhookConnector)`|
+|Operaciones|`dispararParaAlerta(alertaId, precio)`, `transmitirYActualizar(notificacionId)`, `listarPorAlerta(alertaId)`|
+|Responsabilidades|Crear filas en `notificaciones`, descifrar la URL al transmitir, actualizar estados de notificación y de alerta, calcular `proximo_intento` con la política de backoff|
 
 </div>
 
-### Módulo `LeaderboardModule` + `IngestionModule`
+### S-NOTI — `WebhookConnector`
 
 <div align=center>
 
-![Clases de diseño — Leaderboard e Ingestión](../../imagenes/capitulo3/diseno-clases-leaderboard.svg)
+|Atributo|Tipo / valor|
+|-|-|
+|Estereotipo|`<<adapter>>`|
+|Constructor|`()` (sin estado relevante)|
+|Operaciones|`checkReachability(url): Promise<boolean>`, `transmit(url, payload): Promise<void>` *(throws en fallo)*|
+|Responsabilidades|HTTP cliente con timeout corto; abstrae a `NotificacionService` y a `AlertasService` de la complejidad del protocolo|
 
 </div>
 
-### Módulo `EvaluacionModule` + `NotificacionModule`
+### S-NOTI — `startRetryWorker`
+
+<div align=center>
+
+|Artefacto|Naturaleza|Responsabilidad|
+|-|-|-|
+|`startRetryWorker(db, notificaciones)`|Función|Tick periódico que invoca `NotificacionService.transmitirYActualizar` para cada notificación con `proximo_intento <= now()`|
+
+</div>
+
+## Capa de infraestructura (adaptadores y persistencia)
+
+### Puerto `IHyperliquidSource`
+
+<div align=center>
+
+|Aspecto|Detalle|
+|-|-|
+|Estereotipo|`<<port>>`|
+|Definición|Tipo TS con métodos: `subscribeTrades(feedCoin, onTrade)`, `subscribeAllMids(onAllMids)`, `getRecentTrades(feedCoin)`, `getSpotState(address)`, `getPerpState(address)`, `getDelegations(address)`, `getUserFills(address)`, `lastTradeAt(feedCoin)`, `close()`|
+|Implementaciones|`PublicWsAdapter`, `NanorethRpcAdapter`|
+|Selección|`createHyperliquidSource()` lee `HYPERLIQUID_SOURCE` y devuelve la implementación adecuada|
+
+</div>
+
+### `PublicWsAdapter`
+
+<div align=center>
+
+|Aspecto|Detalle|
+|-|-|
+|Estereotipo|`<<adapter>>`|
+|Constructor|`(opts: { wsUrl, infoUrl, feedStaleSeconds, infoMinIntervalMs, tradesInfoMinIntervalMs })`|
+|Responsabilidades|Reconexión automática, multiplexado de canales sobre una única conexión WS, token bucket sobre `POST /info`, mapeo de mensajes crudos a `Operacion` y `Precio` del dominio|
+
+</div>
+
+### `NanorethRpcAdapter`
+
+Esqueleto que implementa la misma interfaz pero lanza error en cada operación. Existe para validar la sustituibilidad del puerto (RS-08); su implementación funcional queda fuera del alcance del MVP.
+
+### Cliente de base de datos
+
+<div align=center>
+
+|Artefacto|Naturaleza|Responsabilidad|
+|-|-|-|
+|`sql`|Cliente `postgres-js`|Conexión gestionada (pool de 10, `onnotice` enrutado al logger)|
+|`db`|Handle Drizzle|Acceso tipado a los esquemas|
+|`encryptWebhook(url)` / `decryptWebhookSelect(...)`|Helpers|Cifrado/descifrado con `pgp_sym_encrypt`/`pgp_sym_decrypt`|
+
+</div>
+
+### Bus de eventos
+
+<div align=center>
+
+|Artefacto|Naturaleza|Responsabilidad|
+|-|-|-|
+|`TypedBus<DomainEventMap>`|Clase|Wrapper tipado sobre `EventEmitter` con `emit(name, payload)` y `on(name, listener)` restringidos al `DomainEventMap`|
+|`bus`|Singleton|Instancia única usada por todos los productores y consumidores|
+
+</div>
+
+## Capa de presentación
+
+### Gateways HTTP
+
+Un módulo `*.routes.ts` por subsistema, con validación Zod y mapeo de errores de dominio a HTTP en el filtro global (`shared/errors.ts`).
+
+<div align=center>
+
+|Gateway|Endpoints|Subsistema|
+|-|-|-|
+|`registerCatalogoRoutes`|CRUD de `entidades` y `direcciones`, `POST /api/direcciones/resolver`|S-CATA|
+|`registerAlertasRoutes`|CRUD de `alertas`|S-ALER|
+|`registerDireccionDetalleRoutes`|`GET /api/direcciones/:addr/{spot,perps,staking,fills}`|S-CATA *(extensión CU-07)*|
+|`registerMetaRoutes`|`GET /api/meta/{tokens,perp-dexs,refresh,top-volumen,candles}`|S-CATA *(catálogo de HL)*|
+|`registerLeaderboardBalancesRoutes`|`POST /api/leaderboard/saldos`|S-LEAD *(enriquecimiento)*|
+|`registerHealth`|`GET /health`|*transversal*|
+
+</div>
+
+### Gateway WS
+
+`registerLeaderboardGateway` (`<<gateway>>`): única responsabilidad del WS del backend; expone `/ws/leaderboard` y reenvía `LeaderboardActualizado` a los clientes suscritos.
+
+### Frontend
+
+<div align=center>
+
+|Tipo|Artefacto|Responsabilidad|
+|-|-|-|
+|Pages|`LeaderboardPage`, `EntidadesPage`, `EntidadDetailPage`, `DireccionDetailPage`, `AlertasPage`|Una por boundary primaria del análisis|
+|Features|`features/leaderboard/*`, `features/catalogo/*`, `features/alertas/*`|Componentes específicos de cada CdU (formularios, tablas, gráficos)|
+|Core|`core/api.ts` (cliente HTTP), `core/AppDataContext.tsx` (estado global compartido)|Servicios transversales del frontend|
+
+</div>
+
+`AppDataContext` actúa como **boundary central de la sesión**: mantiene una única conexión WS al backend para el leaderboard, suscribe el catálogo y los mids, y los expone a todas las páginas con un solo proveedor de React.
+
+## Trazabilidad análisis → diseño
+
+<div align=center>
+
+|Rol de análisis|Clase(s) de diseño|Módulo|
+|-|-|-|
+|`VistaLeaderboard`|`LeaderboardPage` + `LeaderboardTable` + `LeaderboardFilters` + `AppDataContext`|`web/src/pages/`, `web/src/features/leaderboard/`, `web/src/core/`|
+|`VistaEntidades`|`EntidadesPage`, `EntidadDetailPage`, `DireccionDetailPage`, `EntidadForm`, `DireccionForm`|`web/src/pages/`, `web/src/features/catalogo/`|
+|`VistaAlertas`|`AlertasPage`, `AlertaForm`|`web/src/pages/`, `web/src/features/alertas/`|
+|`ConectorHyperliquid`|`PublicWsAdapter` (impl. de `IHyperliquidSource`)|`app/src/sources/`|
+|`ConectorWebhook`|`WebhookConnector`|`app/src/modules/notificacion/`|
+|`GestorConsultaLeaderboard`|`LeaderboardService` + `LeaderboardState` + `TradePersistence` + `LeaderboardBalancesService`|`app/src/modules/leaderboard/`|
+|`GestorCatalogoEntidades`|`CatalogoService` (+ `AddressDetailService` y `MetaService` como colaboradores)|`app/src/modules/catalogo/`, `app/src/modules/direccion-detalle/`, `app/src/modules/meta/`|
+|`GestorAlertasPrecio`|`AlertasService`|`app/src/modules/alertas/`|
+|`GestorEvaluacionAlertas`|`wireEvaluacion` + `evaluarAlertasContraPrecio`|`app/src/modules/evaluacion/`|
+|`GestorEnvioNotificacion`|`NotificacionService` + `startRetryWorker`|`app/src/modules/notificacion/`|
+|`LeaderboardEnVivo`|`LeaderboardState` (in-memory) + tabla `lb_trades` (histórico)|`app/src/modules/leaderboard/leaderboard.state.ts`, `app/src/persistence/schema/lb_trades.ts`|
+|Entidades del dominio|Tipos TS en `domain/types.ts` + tablas Drizzle en `persistence/schema/*`|`app/src/domain/`, `app/src/persistence/schema/`|
+
+</div>
+
+## Aplicación de SOLID
+
+<div align=center>
+
+|Principio|Aplicación concreta|
+|-|-|
+|**SRP**|`evaluator.ts` solo evalúa umbrales; `WebhookConnector` solo habla HTTP; `LeaderboardState` solo agrega; `TradePersistence` solo persiste trades|
+|**OCP**|Nuevos consumidores se añaden al bus sin tocar productores; nuevos tipos de alerta implementan una nueva función de predicado; nuevo adaptador de HL implementa `IHyperliquidSource` y se registra en `createHyperliquidSource()`|
+|**LSP**|`PublicWsAdapter` y `NanorethRpcAdapter` son intercambiables como `IHyperliquidSource` (con la salvedad de que el segundo no es funcional hoy; cuando lo sea, no requerirá cambios en clientes)|
+|**ISP**|El puerto `IHyperliquidSource` se mantiene cohesivo (mismo proveedor); las consultas REST puntuales y la suscripción WS están en la misma interfaz porque el cliente de los adaptadores las usa juntas. Los servicios consumen sólo los métodos que necesitan|
+|**DIP**|`LeaderboardService` y `AddressDetailService` dependen del puerto `IHyperliquidSource`, no de adaptadores concretos. El composition root es el único lugar que conoce a `PublicWsAdapter`|
+
+</div>
+
+## Diagramas por área
+
+### Área Leaderboard (S-LEAD + S-INGE)
+
+<div align=center>
+
+![Clases de diseño — Leaderboard](../../imagenes/capitulo3/diseno-clases-leaderboard.svg)
+
+</div>
+
+### Área Catálogo (S-CATA)
+
+<div align=center>
+
+![Clases de diseño — Catálogo](../../imagenes/capitulo3/diseno-clases-catalogo.svg)
+
+</div>
+
+### Área Alertas (S-ALER)
+
+<div align=center>
+
+![Clases de diseño — Alertas](../../imagenes/capitulo3/diseno-clases-alertas.svg)
+
+</div>
+
+### Área Evaluación + Notificación (S-EVAL + S-NOTI)
 
 <div align=center>
 
@@ -284,57 +341,16 @@ Implementa los puertos de salida. El núcleo no conoce esta capa.
 
 </div>
 
-### Módulo `CatalogoModule`
+## Patrones aplicados
 
 <div align=center>
 
-![Clases de diseño — CatalogoModule](../../imagenes/capitulo3/diseno-clases-catalogo.svg)
-
-</div>
-
-## Trazabilidad análisis → diseño
-
-<div align=center>
-
-|Clase de análisis|Clase(s) de diseño|Mecanismo|
+|Patrón|Aplicación|Documento IdSw2|
 |-|-|-|
-|`VistaLeaderboard`|`LeaderboardView` (componente de UI) + `LeaderboardClient` (cliente WS)|Componente UI + cliente de protocolo|
-|`VistaEntidades`|`EntidadesListView`, `EntidadFormView`, `DireccionFormView`|Descomposición en componentes|
-|`VistaAlertas`|`AlertasListView`, `AlertaFormView`|Descomposición en componentes|
-|`ConectorHyperliquid`|`HyperliquidConnector` *(impl.)* + `IHyperliquidPort` *(interfaz)*|Adapter|
-|`ConectorWebhook`|`WebhookConnectorHttp` + `IWebhookConnector`|Adapter|
-|`GestorConsultaLeaderboard`|`LeaderboardService` + `OperationIngestionHandler`|Service + Event handler|
-|`GestorCatalogoEntidades`|`CatalogoService` + `EntidadesRepository` + `DireccionesRepository`|Service + Repositorios|
-|`GestorAlertasPrecio`|`AlertasService` + `AlertasRepository` + `IAlertasQueryService`|Service + Repositorio + interfaz especializada (ISP)|
-|`GestorEvaluacionAlertas`|`PriceUpdateHandler` + `AlertEvaluator`|Handler + estrategia pura|
-|`GestorEnvioNotificacion`|`AlertTriggeredHandler` + `NotificacionService` + `RetryWorker`|Handler + Service + Worker para reintentos|
-|`LeaderboardEnVivo`|`LeaderboardSnapshotRepositoryRedis` + estructura Sorted Set|Repository + Estructura Redis|
-|*Entidades del dominio*|Clases puras en `domain/` + `XxxOrmEntity` en `infrastructure/`|Separación dominio ↔ ORM|
-
-</div>
-
-## Validación del diseño de clases
-
-<div align=center>
-
-|Criterio|Comprobación|
-|-|-|
-|**Trazabilidad con análisis**|Cada clase de diseño se mapea a un rol de análisis. Cero clases huérfanas|
-|**Inversión de dependencias**|Servicios de aplicación dependen de interfaces de puerto, no de tecnología concreta|
-|**Tipado del dominio**|`Address`, `TokenSymbol`, `Volume` aparecen en lugar de tipos primitivos|
-|**Encapsulación de mecanismos**|Eventos: solo en `domain/events/`. Persistencia: solo en `infrastructure/persistence/`. HTTP: solo en `presentation/http/`|
-|**Cero dependencias inversas**|`domain/` no importa nada de las capas externas — comprobable con regla estática (cf. [Diseño de paquetes](disenoPaquetes.md))|
-
-</div>
-
-## Trazabilidad hacia el resto del capítulo y la implementación
-
-<div align=center>
-
-|Hacia|Compromiso|
-|-|-|
-|[Diseño de paquetes](disenoPaquetes.md)|La estructura de carpetas refleja la separación dominio/aplicación/infraestructura/presentación|
-|[Modelo de datos](modeloDeDatos.md)|Cada `XxxOrmEntity` se materializa en una tabla; los `Sorted Set` de Redis siguen el esquema de claves|
-|Capítulo 4|Las firmas y contratos aquí fijados son el contrato de implementación: el código se obtiene completando los cuerpos de método sin alterar el esqueleto|
+|**Adapter**|`PublicWsAdapter`, `NanorethRpcAdapter`, `WebhookConnector`|[patronesIndireccion.md](../../IdSw2/temario/02-diseñoModular/patronesIndireccion.md)|
+|**Repository (informal)**|Servicios que acceden a Drizzle integran la responsabilidad de repo dentro del servicio porque la frontera no añade valor (mismo lenguaje, mismo proceso, sin sustituibilidad pendiente)|[sc.bpp.md](../../IdSw2/temario/02-diseñoModular/sc.bpp.md)|
+|**Observer / Bus**|`TypedBus` desacopla productores (`PublicWsAdapter`, composition root, `LeaderboardService`) de consumidores (`wireEvaluacion`, `LeaderboardGateway`)|[jerarquizacion.md](../../IdSw2/temario/02-diseñoModular/jerarquizacion.md) (L250)|
+|**Strategy (vía interfaz)**|`IHyperliquidSource` permite cambiar la estrategia de obtención de datos de HL sin tocar el resto|[04-composicionVsHerencia.md](../../IdSw2/temario/01-diseño/04-composicionVsHerencia.md)|
+|**Composition root**|`server.ts` cablea manualmente todos los servicios y adaptadores; el resto del código depende de interfaces|—|
 
 </div>

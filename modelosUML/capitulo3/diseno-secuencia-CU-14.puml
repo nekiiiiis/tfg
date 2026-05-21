@@ -1,50 +1,62 @@
 @startuml
 skinparam shadowing false
 
-participant "EventBus" as BUS
-participant "AlertTriggeredHandler\n<<service>>" as ATH
+participant "wireEvaluacion\n(CU-13)" as EV
 participant "NotificacionService\n<<service>>" as NS
-participant "NotificacionesRepository\n<<repo>>" as NREPO
+participant "Drizzle\n(tabla notificaciones)" as DB
+participant "pgcrypto\n(pgp_sym_decrypt)" as CRY
 participant "WebhookConnector\n<<adapter>>" as WHC
 actor "Servicio Webhook" as SW
-participant "AlertasService\n<<service>>" as AS
-participant "RetryQueue (Redis)\n<<repo>>" as RQ
+participant "Drizzle\n(tabla alertas)" as ADB
+participant "TypedBus" as BUS
 
-BUS ->> ATH : @OnEvent('AlertaDisparada')
-activate ATH
-
-ATH -> NS : enviar(alerta, precio)
+EV -> NS : dispararParaAlerta(alertaId, precio)
 activate NS
 
-NS -> NREPO : save(notif PENDIENTE)
-NREPO --> NS : id
+NS -> DB : INSERT notificaciones\nestado='PENDIENTE',\nintento=1, proximo_intento=now()
+DB --> NS : notifId
 
-NS -> WHC : transmitir(notif, webhook)
+note right of NS
+  La transmisión se ejecuta
+  en background; no bloquea
+  al evaluador (CU-13).
+end note
+
+NS -> NS : transmitirYActualizar(notifId)
+activate NS
+NS -> DB : SELECT n + pgp_sym_decrypt(webhook_url_enc)
+DB --> NS : { notif, urlClara }
+NS -> WHC : transmit(url, payload)
+activate WHC
 WHC -> SW : HTTPS POST {payload}
-
 alt 2xx OK
     SW --> WHC : 200
     WHC --> NS : OK
-    NS -> NREPO : update ENTREGADA
-    NS -> AS : rearmarAlerta(alertaId)
+    NS -> DB : UPDATE notificaciones\nSET estado='ENTREGADA',\n    entregada_en=now()
+    NS -> ADB : UPDATE alertas\nSET estado='OPERATIVA'
     NS ->> BUS : emit NotificacionConfirmada
 else fallo / timeout
     SW --> WHC : 5xx / timeout
-    WHC --> NS : FALLO
-    NS -> NREPO : update FALLIDA + ultimo_error
-    NS -> AS : marcarNotificacionFallida(alertaId)
-    NS -> RQ : enqueue({notifId, intento=1})
+    WHC --> NS : Error
+    NS -> NS : calcular backoff(intento)
+    NS -> DB : UPDATE notificaciones\nSET estado='FALLIDA',\n    intento=intento+1,\n    proximo_intento=...,\n    ultimo_error=...
+    NS -> ADB : UPDATE alertas\nSET estado='NOTIFICACION_FALLIDA'
     NS ->> BUS : emit NotificacionFallida
 end
-
+deactivate WHC
 deactivate NS
-deactivate ATH
+deactivate NS
 
-== Retry asíncrono (otra activación) ==
+== Reintento periódico (otra activación) ==
 
-participant "RetryWorker\n<<service>>" as RW
-RQ ->> RW : BRPOP (intento N)
-RW -> NS : reintentar(notifId)
-note right: mismo flujo a partir\ndel transmitir(...)
+participant "startRetryWorker\n<<service>>" as RW
+
+loop cada NOTIFICATION_RETRY_TICK_SECONDS
+    RW -> DB : SELECT notificaciones\nWHERE estado IN ('PENDIENTE','FALLIDA')\nAND proximo_intento <= now()\n(idx notif_pendientes_proximas)
+    DB --> RW : pendientes[]
+    loop por cada pendiente
+        RW -> NS : transmitirYActualizar(id)
+    end
+end
 
 @enduml

@@ -4,55 +4,58 @@ skinparam nodesep 80
 skinparam ranksep 60
 
 actor "Usuario" as U
-cloud "Hyperliquid L1" as HL
-cloud "Servicio Webhook\n(n8n)" as SW
+cloud "Hyperliquid L1\n(WS + REST)" as HL
+cloud "Servicio Webhook\n(HTTPS)" as SW
 
-node "Host Docker — Infinite Fieldx" as HOST {
+node "Host Docker" as HOST {
+
     rectangle "Red: fieldx-edge" as EDGE #E3F2FD {
-        node "frontend\n(nginx + React build)" as FE
+        node "fieldx-app\n(Node 20 + Fastify)" as APP {
+            artifact "dist/server.js"
+            artifact "public/\n(SPA Vite)"
+            artifact "dist/persistence/migrations/"
+        }
     }
+
     rectangle "Red: fieldx-internal" as INT #FFF3E0 {
-        node "backend\n(Node 20 + NestJS)" as BE
-        database "postgres\n(PostgreSQL 16)" as PG
-        database "redis\n(Redis 7 + AOF)" as RD
+        database "fieldx-postgres\n(PostgreSQL 16 + pgcrypto)" as PG
     }
+
     folder "Volúmenes" as VOLS #ECEFF1 {
         artifact "fieldx-postgres-data" as VPG
-        artifact "fieldx-redis-data" as VRD
-        artifact "fieldx-backend-logs" as VLOG
     }
 }
 
-U --> FE : HTTPS 443
-FE --> BE : HTTP /api/* + WS /ws/*
-BE --> PG : TCP 5432
-BE --> RD : TCP 6379
-BE --> HL : WebSocket (saliente)
-BE --> SW : HTTPS POST (saliente)
+U  --> APP : HTTP :3001\n(REST + WS + SPA)
+APP --> PG : TCP 5432
+APP --> HL : WS + REST  (saliente)
+APP --> SW : HTTPS POST (saliente)
 
 PG ..> VPG : datos persistentes
-RD ..> VRD : AOF
-BE ..> VLOG : logs
 
-note right of FE
-  Único puerto expuesto: 443.
-  Termina TLS.
-  Reverse proxy a /api/* y /ws/*.
+note right of APP
+  Único proceso del backend.
+  Sirve el SPA con
+  @fastify/static desde /public.
+  Composition root cablea
+  servicios, adaptadores y
+  workers.
 end note
 
-note right of BE
-  Subsistemas:
-  S-PRES, S-INGE, S-LEAD,
-  S-CATA, S-ALER, S-EVAL, S-NOTI
-  + EventBus en proceso
+note bottom of PG
+  Tablas: entidades, direcciones,
+  alertas, notificaciones, lb_trades.
+  Extensión pgcrypto cargada
+  por la migración inicial.
 end note
 
 note bottom of HOST
-  Auto-reinicio del contenedor
-  tras crash o reboot del host.
-  Sondas de salud por servicio.
-  Arranque ordenado: backend
-  espera a postgres y redis.
+  restart: unless-stopped.
+  Healthchecks por servicio:
+   - postgres: pg_isready
+   - app: GET /health
+  Arranque ordenado: app espera
+  a postgres healthy.
 end note
 
 @enduml

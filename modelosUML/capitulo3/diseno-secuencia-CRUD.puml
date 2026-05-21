@@ -2,29 +2,37 @@
 skinparam shadowing false
 
 actor "Usuario" as U
-participant "VistaXxx\n(React)" as V
-participant "XxxController\n<<controller>>" as C
+participant "Page + Form\n(React)" as V
+participant "registerXxxRoutes\n<<gateway>>" as C
+participant "Validador Zod" as Z
 participant "XxxService\n<<service>>" as S
-participant "XxxRepository\n<<repo>>" as R
-participant "EventBus\n<<opcional>>" as B
+participant "Drizzle\n(tabla destino)" as R
 
 U -> V : interacción UI
-V -> C : HTTP\n(POST/GET/PATCH/DELETE)
-C -> C : validar DTO\n(class-validator)
-C -> S : método de aplicación
+V -> C : HTTP\n(POST / GET / PATCH / DELETE)
+C -> Z : parse(body, params)
+Z --> C : datos tipados\n(o 400 si inválido)
+C -> S : método del CdU
 activate S
-S -> S : validar reglas de negocio
-S -> R : SQL parametrizado\n(TypeORM)
+S -> S : validar invariantes\n(unicidad, FK, formato)
+S -> R : SQL parametrizado\n(insert / select / update / delete)
 R --> S : entidad / lista / void
-S ->> B : emit XxxEvento\n(opcional, RS-04)
-S --> C : ResponseDto
+S --> C : resultado
 deactivate S
-C --> V : 200 / 201 / 204 / 4xx
+C --> V : 200 / 201 / 204\no 4xx con DomainError
 V --> U : confirmación / error
 
-note right of S
-  @Transactional si la
-  operación toca varias tablas
+note over S
+  Filtro global mapea
+  DomainError → HTTP en
+  app/src/shared/errors.ts
+end note
+
+note over R
+  El servicio integra el acceso
+  Drizzle: no hay capa de
+  repositorio explícita porque
+  no añade valor.
 end note
 
 @enduml

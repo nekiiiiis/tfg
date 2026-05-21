@@ -3,66 +3,94 @@ skinparam shadowing false
 skinparam classAttributeIconSize 0
 hide circle
 
-package "application/evaluacion" {
-    class PriceUpdateHandler <<service>> {
-        + handle(ev): void  <<@OnEvent('PrecioActualizado')>>
+package "modules/evaluacion" {
+    class wireEvaluacion <<handler>> {
+        + on('PrecioActualizado', payload)
     }
-    class AlertEvaluator <<service>> <<strategy>> {
-        + evaluar(alerta, precio): boolean
+    class evaluarAlertasContraPrecio <<pure>> {
+        + (alertas, precio) : ids[]
     }
 }
 
-package "application/notificacion" {
-    interface INotificacionService <<port-in>> {
-        + enviar(alerta, precio)
+package "domain" {
+    class evaluarUmbral <<pure>> {
+        + (umbral, precio) : boolean
     }
-    interface IWebhookConnector <<port-out>> {
-        + checkReachability(url): Promise<boolean>
-        + transmitir(n, url): Promise<Resultado>
-    }
-    interface INotificacionesRepository <<port-out>>
-    interface IRetryQueue <<port-out>>
-    class NotificacionService <<service>>
-    class AlertTriggeredHandler <<service>> {
-        + handle(ev): void  <<@OnEvent('AlertaDisparada')>>
-    }
-    class RetryWorker <<service>>
+    class Umbral <<value>>
 }
 
-package "domain/notificacion" {
-    class Notificacion <<entity>>
+package "modules/notificacion" {
+    class NotificacionService <<service>> {
+        - db : DB
+        - webhook : WebhookConnector
+        + dispararParaAlerta(alertaId, precio)
+        + transmitirYActualizar(notifId)
+        + listarPorAlerta(alertaId)
+    }
+    class WebhookConnector <<adapter>> {
+        + checkReachability(url)
+        + transmit(url, payload)
+    }
+    class startRetryWorker <<service>> {
+        + tick()
+    }
+}
+
+package "domain" {
+    class Notificacion <<entity>> {
+        + id : UUID
+        + alertaId : UUID
+        + precioDisparador : Numeric
+        + instanteEmision : timestamp
+        + estado : EstadoEntrega
+        + intento : int
+        + proximoIntento : timestamp
+    }
     enum EstadoEntrega {
         PENDIENTE
         ENTREGADA
         FALLIDA
     }
-    class Webhook <<value>>
 }
 
-package "infrastructure/persistence/postgres" {
-    class NotificacionesRepositoryTypeOrm <<repo>> #FFF3E0
-}
-package "infrastructure/persistence/redis" {
-    class RetryQueueRedis <<repo>> #FFF3E0
-}
-package "infrastructure/connectors/webhook" {
-    class WebhookConnectorHttp <<adapter>> #FFF3E0
+package "persistence" {
+    class "tabla notificaciones\n(idx estado, proximo_intento)" as TN <<table>> #ECEFF1
+    class "tabla alertas" as TA <<table>> #ECEFF1
 }
 
-PriceUpdateHandler ..> AlertEvaluator
-AlertTriggeredHandler ..> INotificacionService
-NotificacionService ..|> INotificacionService
-NotificacionService ..> IWebhookConnector
-NotificacionService ..> INotificacionesRepository
-NotificacionService ..> IRetryQueue
+package "bus" {
+    class TypedBus <<infrastructure>>
+}
+
+TypedBus ..> wireEvaluacion : on('PrecioActualizado')
+wireEvaluacion ..> TA : SELECT alertas OPERATIVAS por token
+wireEvaluacion ..> evaluarAlertasContraPrecio
+evaluarAlertasContraPrecio ..> evaluarUmbral
+evaluarUmbral ..> Umbral
+wireEvaluacion ..> TA : UPDATE estado='DISPARADA'
+wireEvaluacion ..> TypedBus : emit('AlertaDisparada')
+wireEvaluacion ..> NotificacionService : dispararParaAlerta
+
+NotificacionService ..> TN
+NotificacionService ..> TA : UPDATE estado alerta
+NotificacionService ..> WebhookConnector
+NotificacionService ..> TypedBus : emit('NotificacionConfirmada' | 'NotificacionFallida')
 NotificacionService ..> Notificacion
-RetryWorker ..> IRetryQueue
-RetryWorker ..> INotificacionService
-
-NotificacionesRepositoryTypeOrm ..|> INotificacionesRepository
-RetryQueueRedis ..|> IRetryQueue
-WebhookConnectorHttp ..|> IWebhookConnector
 Notificacion --> EstadoEntrega
-Notificacion --> Webhook
+startRetryWorker ..> TN : SELECT pendientes vencidas
+startRetryWorker ..> NotificacionService : transmitirYActualizar
+
+note right of evaluarAlertasContraPrecio
+  Función pura: facilita
+  pruebas unitarias sin BD
+  ni red.
+end note
+
+note right of startRetryWorker
+  Tick configurable
+  (NOTIFICATION_RETRY_TICK_SECONDS).
+  Materializa la cola virtual de
+  reintentos sobre Postgres (RS-07).
+end note
 
 @enduml

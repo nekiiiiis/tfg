@@ -3,42 +3,68 @@ skinparam shadowing false
 skinparam sequenceMessageAlign direction
 
 actor "Usuario" as U
-participant "LeaderboardClient\n(WS, browser)" as CLI
-participant "LeaderboardGateway\n<<gateway>>" as GW
+participant "LeaderboardPage\n+ AppDataContext\n(React)" as CLI
+participant "registerLeaderboardGateway\n<<gateway>>" as GW
 participant "LeaderboardService\n<<service>>" as SVC
-participant "LeaderboardSnapshot\nRepository (Redis)\n<<repo>>" as REPO
-participant "AddressNameResolver\n<<service>>" as NAMES
-participant "EventBus" as BUS
-participant "OperationIngestion\nHandler\n<<service>>" as OIH
-participant "HyperliquidConnector\n<<adapter>>" as HLC
+participant "LeaderboardState\n(in-memory)" as STATE
+participant "TradePersistence\n<<service>>" as TP
+participant "MetaService\n<<service>>" as META
+participant "PublicWsAdapter\n<<adapter>>" as HLC
+participant "TypedBus" as BUS
+participant "CatalogoService\n<<service>>" as CAT
 actor "Hyperliquid L1" as HL
 
 U -> CLI : abrir vista
-CLI -> GW : WS connect + subscribe-leaderboard\n{mercado, token, temporalidad}
-GW -> SVC : suscribir(q, cliente)
-SVC -> REPO : obtenerTopN(terna, 50)
-REPO --> SVC : filas
-SVC -> NAMES : resolverNombres(direcciones)
-NAMES --> SVC : nombres
+CLI -> GW : WS /ws/leaderboard\nsubscribe {mercado, token, temporalidad}
+GW -> SVC : subscribe(terna, {topN})
+activate SVC
+SVC -> META : resolveToken(mercado, displayToken)
+META --> SVC : feedCoin
+SVC -> HLC : subscribeTrades(feedCoin)
+activate HLC
+SVC -> TP : getHistorical(mercado, token, sinceMs)
+TP --> SVC : trades históricos
+SVC -> STATE : ingestBackfill(terna, ops[])
+SVC -> STATE : snapshot(terna, topN)
+STATE --> SVC : filas iniciales
 SVC --> GW : snapshot inicial
-GW --> CLI : "leaderboard-snapshot" {filas}
-CLI --> U : presentar tabla
+deactivate SVC
+GW --> CLI : {type: "snapshot", rows}
+CLI -> CAT : POST /api/direcciones/resolver(addrs[])
+CAT --> CLI : nombres
+CLI --> U : tabla con nombres
 
-== Flujo continuo (asíncrono) ==
+== Flujo continuo ==
 
 HL ->> HLC : trade (WS push)
-HLC ->> BUS : emit OperacionRecibida
-BUS ->> OIH : @OnEvent('OperacionRecibida')
-OIH -> REPO : añadirOperacion(terna, op)
-OIH ->> BUS : emit LeaderboardActualizado
-BUS ->> GW : @OnEvent('LeaderboardActualizado')
-GW --> CLI : "leaderboard-update" {delta}
-CLI --> U : refrescar fila afectada
+HLC ->> SVC : onTrade(op)
+activate SVC
+SVC -> SVC : dedupe(tid)
+SVC -> TP : enqueue(op)
+SVC -> STATE : ingest(terna, op)
+SVC ->> BUS : emit LeaderboardActualizado
+deactivate SVC
+BUS ->> GW : LeaderboardActualizado
+GW --> CLI : {type: "update", delta}
+CLI --> U : refrescar fila
 
-== Cierre ==
+== Polling adaptativo (red de seguridad) ==
+
+SVC -> HLC : getRecentTrades(feedCoin)
+HLC --> SVC : ops[]
+SVC -> SVC : dedupe + ingest
+
+== Cierre y keep-alive ==
 
 U -> CLI : cerrar vista
-CLI -> GW : unsubscribe-leaderboard
-GW -> SVC : cancelar suscripción
+CLI -> GW : WS close / unsubscribe
+GW -> SVC : unsubscribe(terna)
+note right of SVC
+  Si no quedan suscriptores
+  para el par, el canal entra
+  en grace period y luego
+  en keepAlive (sigue alimentando
+  lb_trades para RS-03).
+end note
 
 @enduml

@@ -1,0 +1,46 @@
+@startuml
+
+skinparam linetype polyline
+skinparam shadowing false
+hide footbox
+
+title CU-01 — Consultar leaderboard · realización en el código
+
+actor "Usuario" as U
+participant "LeaderboardPage\n+ LeaderboardFilters\n+ LeaderboardTable" as UI
+participant "AppDataContext\n(WS único)" as Ctx
+participant "LeaderboardGateway\n(WS server)" as GW
+participant "LeaderboardService" as Svc
+participant "LeaderboardState\n(in-memory)" as State
+participant "TradePersistence\n(lb_trades)" as TP
+participant "PublicWsAdapter" as Adapter
+participant "Hyperliquid L1" as L1
+
+U  -> UI  : selecciona (mercado, token, temporalidad, lado)
+UI -> Ctx : setSelection(...)
+Ctx -> GW : subscribe(terna)
+GW -> Svc : subscribe(terna)
+Svc -> Adapter : openChannel(feedCoin)
+Adapter -> L1 : WS subscribe(trades)
+
+== Snapshot inicial ==
+Svc -> State : getSnapshot(terna)
+Svc -> TP    : selectVentanaLarga(terna)
+Svc --> GW   : snapshot
+GW --> Ctx   : LeaderboardSnapshot
+Ctx --> UI   : render inicial
+
+== Ingestión continua ==
+loop por cada trade recibido
+  L1      -> Adapter : trade(tid, side, sz, px, ...)
+  Adapter -> Svc    : onTrade(trade)
+  Svc     -> TP     : insert(trade)
+  Svc     -> State  : aggregate(trade)
+  Svc     -> GW     : LeaderboardActualizado(delta)
+  GW      -> Ctx    : delta
+  Ctx     -> UI     : LeaderboardTable.update()
+end
+
+UI -> UI : POST /api/direcciones/resolver (batch)
+
+@enduml

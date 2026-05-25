@@ -1,8 +1,33 @@
-# Capturas del SPA — capítulos finales
+# Material gráfico — capítulos finales
 
-Esta carpeta agrupa las capturas de la interfaz de usuario referenciadas desde los capítulos finales del TFG.
+Esta carpeta agrupa el material gráfico referenciado desde los capítulos finales del TFG: **diagramas UML** (renderizados a partir de las fuentes de [`/modelosUML/capitulosFinales/`](../../modelosUML/capitulosFinales/)) y **capturas del SPA** generadas a partir de la solución en ejecución.
 
-## Inventario esperado
+## Diagramas UML
+
+<div align=center>
+
+|Archivo|Diagrama|Documento que lo referencia|
+|-|-|-|
+|`navegacion.svg`|Mapa de navegación del SPA: estados del cap. 2 anotados con rutas del SPA y transiciones etiquetadas con CdU|[`mapaNavegacion.md`](../../docs/capitulosFinales/mapaNavegacion.md)|
+|`cascadaCdU.svg`|Cascada compartida de capas Detalle → Prototipo → Análisis → Diseño → Implementación|[`casosDeUsoImplementados.md`](../../docs/capitulosFinales/casosDeUsoImplementados.md)|
+|`cu-01-secuencia.svg`|Secuencia de implementación de CU-01 (suscripción WS, ingestión, snapshot y empuje al cliente)|[`casosDeUsoImplementados.md`](../../docs/capitulosFinales/casosDeUsoImplementados.md#cu-01--consultar-leaderboard)|
+|`cu-09-secuencia.svg`|Secuencia de implementación de CU-09 (validación Zod, *reachability*, cifrado y persistencia)|[`casosDeUsoImplementados.md`](../../docs/capitulosFinales/casosDeUsoImplementados.md#cu-09--crear-alerta-de-precio)|
+|`cu-13-secuencia.svg`|Secuencia de implementación de CU-13 (allMids → bus → evaluación pura → disparo + <<include>> a CU-14)|[`casosDeUsoImplementados.md`](../../docs/capitulosFinales/casosDeUsoImplementados.md#cu-13--evaluar-alertas-activas)|
+|`cu-14-secuencia.svg`|Secuencia de implementación de CU-14 (transmisión, éxito/fallo, cola virtual de reintentos)|[`casosDeUsoImplementados.md`](../../docs/capitulosFinales/casosDeUsoImplementados.md#cu-14--enviar-notificación)|
+|`patronCRUD.svg`|Secuencia común del patrón CRUD que materializan CU-02..CU-08 y CU-10..CU-12|[`casosDeUsoImplementados.md`](../../docs/capitulosFinales/casosDeUsoImplementados.md#casos-de-uso-crud--cu-02cu-08-y-cu-10cu-12)|
+|`ajustesPila.svg`|Mapa de ajustes de pila *antes (cap. 3) → después (cap. 4)*, etiquetado por RS afectados|[`ajustesDePila.md`](../../docs/capitulosFinales/ajustesDePila.md)|
+|`arbolObjetivos.svg`|Árbol Hipótesis → OG → OE1/OE2/OE3 → Capítulos del TFG|[`conclusiones.md`](../../docs/capitulosFinales/conclusiones.md)|
+|`coberturaRS.svg`|Cobertura del MVP sobre RS-01..RS-10 agrupados por categoría, con anclaje a artefacto del repo|[`conclusiones.md`](../../docs/capitulosFinales/conclusiones.md#cobertura-de-los-requisitos-suplementarios)|
+|`decisionesTecnicas.svg`|Seis decisiones técnicas estructurantes: alternativa descartada vs. solución elegida|[`discusion.md`](../../docs/capitulosFinales/discusion.md#decisiones-técnicas-de-mayor-calado)|
+|`compromisosTransversales.svg`|Cuatro compromisos transversales del MVP como tensión entre dos métricas|[`discusion.md`](../../docs/capitulosFinales/discusion.md#compromisos-transversales)|
+|`futurasLineas.svg`|Mindmap de las futuras líneas, organizadas en cuatro ejes (Infraestructura, Funcional, Calidad y seguridad, Validación y adopción)|[`futuras.md`](../../docs/capitulosFinales/futuras.md#mapa-de-continuaciones)|
+|`plazosFuturas.svg`|Plazos orientativos por eje y dependencias entre ellos|[`futuras.md`](../../docs/capitulosFinales/futuras.md#plazos-y-dependencias)|
+
+</div>
+
+> Para regenerar los SVG desde la fuente, ejecutar `plantuml -tsvg modelosUML/capitulosFinales/*.puml -o imagenes/capitulosFinales/` desde la raíz del repositorio.
+
+## Inventario de capturas del SPA
 
 <div align=center>
 

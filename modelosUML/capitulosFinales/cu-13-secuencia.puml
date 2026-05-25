@@ -1,0 +1,41 @@
+@startuml
+
+skinparam linetype polyline
+skinparam shadowing false
+hide footbox
+
+title CU-13 — Evaluar alertas activas · realización en el código\n(actor: Hyperliquid L1 — sin intervención del Usuario)
+
+participant "Hyperliquid L1" as L1
+participant "PublicWsAdapter" as Adapter
+participant "server.ts\n(composition root)" as Boot
+participant "TypedBus<DomainEventMap>" as Bus
+participant "evaluacion.subscriber.ts\n(wireEvaluacion)" as Sub
+participant "evaluator.ts\nevaluarAlertasContraPrecio" as Eval
+database    "alertas\n(PostgreSQL)" as DB
+participant "NotificacionService" as Notif
+
+L1     -> Adapter : allMids update
+Adapter -> Boot   : onMids(midsKey → precio)
+Boot   -> Boot    : translate midsKey → display token
+Boot   -> Bus     : emit('PrecioActualizado', token, precio)
+
+Bus  -> Sub : handler('PrecioActualizado')
+Sub  -> DB  : SELECT * FROM alertas\nWHERE token_simbolo=? AND estado='OPERATIVA'
+DB   --> Sub : [alertas operativas]
+
+Sub  -> Eval : evaluarAlertasContraPrecio(alertas, precio)
+Eval --> Sub : [ids disparados]
+
+loop por cada id disparado
+  Sub -> DB   : UPDATE alertas\nSET estado='DISPARADA', ultimo_disparo=now()
+  Sub -> Bus  : emit('AlertaDisparada', alertaId)
+  Sub -> Notif : dispararParaAlerta(alertaId, precio)
+end
+
+note over Notif
+  Encadenamiento <<include>> con CU-14
+  (ver diagrama de CU-14).
+end note
+
+@enduml

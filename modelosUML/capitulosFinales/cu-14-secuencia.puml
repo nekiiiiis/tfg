@@ -1,0 +1,49 @@
+@startuml
+
+skinparam linetype polyline
+skinparam shadowing false
+hide footbox
+
+title CU-14 — Enviar notificación · realización en el código\n(disparada como <<include>> de CU-13)
+
+participant "evaluacion.subscriber" as Sub
+participant "NotificacionService\ndispararParaAlerta" as Svc
+database    "notificaciones\n(PostgreSQL)" as DBN
+database    "alertas\n(PostgreSQL)" as DBA
+participant "pgcrypto\n(pgp_sym_decrypt)" as Crypto
+participant "WebhookConnector\ntransmit" as WC
+participant "Webhook receptor" as Hook
+participant "RetryWorker\n(startRetryWorker)" as Worker
+participant "TypedBus" as Bus
+
+Sub -> Svc : dispararParaAlerta(alertaId, precio)
+Svc -> DBN : INSERT notificaciones\n(estado='PENDIENTE', intento=1, proximo_intento=now())
+Svc -> Svc : transmitirYActualizar(notificacionId)  *(background)*
+
+Svc  -> Crypto : pgp_sym_decrypt(webhook_url_enc, APP_SECRET)
+Crypto --> Svc : url en claro
+Svc  -> WC   : transmit(url, payload)
+WC   -> Hook : POST (JSON, timeout 10s)
+
+alt Éxito
+  Hook --> WC : 2xx
+  WC   --> Svc : ok
+  Svc  -> DBN : UPDATE notificaciones SET estado='ENTREGADA'
+  Svc  -> DBA : UPDATE alertas SET estado='OPERATIVA' (rearme)
+  Svc  -> Bus : emit('NotificacionConfirmada')
+else Fallo (timeout / 5xx / red)
+  Hook --> WC : error
+  WC   --> Svc : error
+  Svc  -> DBN : UPDATE notificaciones\nSET estado='FALLIDA', intento+=1,\nproximo_intento=now()+backoff(intento)
+  Svc  -> DBA : UPDATE alertas SET estado='NOTIFICACION_FALLIDA'
+  Svc  -> Bus : emit('NotificacionFallida')
+end
+
+== Cola virtual de reintentos ==
+loop cada NOTIFICATION_RETRY_TICK_SECONDS
+  Worker -> DBN : SELECT pendientes\nWHERE estado IN ('PENDIENTE','FALLIDA')\nAND proximo_intento <= now()
+  DBN    --> Worker : [pendientes]
+  Worker -> Svc : transmitirYActualizar(id) por cada uno
+end
+
+@enduml

@@ -1,0 +1,50 @@
+@startuml
+
+skinparam linetype ortho
+skinparam shadowing false
+skinparam rectangle {
+  BackgroundColor #FAFAFA
+  BorderColor #5A5A5A
+  FontColor #1F1F1F
+}
+hide stereotype
+
+title Decisiones técnicas estructurantes · alternativa descartada vs. solución elegida
+
+rectangle "Frontera con Hyperliquid" as D1 {
+  rectangle "Acoplamiento directo\na REST + WS público" as A1
+  rectangle "**Puerto hexagonal**\nIHyperliquidSource\n+ adaptadores intercambiables" as B1
+  A1 -[#888]-> B1 : descartada
+}
+
+rectangle "Comunicación entre subsistemas" as D2 {
+  rectangle "Bus externo\n(Redis Streams / NATS)" as A2
+  rectangle "**Bus in-process tipado**\nTypedBus<DomainEventMap>\nsobre EventEmitter" as B2
+  A2 -[#888]-> B2 : descartada
+}
+
+rectangle "Estado caliente del leaderboard" as D3 {
+  rectangle "Redis Sorted Sets" as A3
+  rectangle "**Estructuras en memoria**\nLeaderboardState\n(Map<Address, Aggregate>)" as B3
+  A3 -[#888]-> B3 : descartada
+}
+
+rectangle "Cola de reintentos" as D4 {
+  rectangle "Redis Lists + worker" as A4
+  rectangle "**Cola virtual en BD**\ntabla notificaciones\n+ RetryWorker" as B4
+  A4 -[#888]-> B4 : descartada
+}
+
+rectangle "Stack frontend" as D5 {
+  rectangle "Next.js + Material UI\n/ Ant Design" as A5
+  rectangle "**Vite + React 19**\n+ Tailwind + shadcn/ui" as B5
+  A5 -[#888]-> B5 : descartada
+}
+
+rectangle "ORM y migraciones" as D6 {
+  rectangle "TypeORM / Prisma" as A6
+  rectangle "**Drizzle ORM**\n+ Drizzle Kit (SQL-first)" as B6
+  A6 -[#888]-> B6 : descartada
+}
+
+@enduml

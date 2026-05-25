@@ -1,0 +1,59 @@
+@startuml
+
+skinparam linetype polyline
+hide empty description
+
+[*] --> SISTEMA_DISPONIBLE
+
+state SISTEMA_DISPONIBLE
+state "LEADERBOARD_ABIERTO\n[ /leaderboard ]" as LEADERBOARD_ABIERTO
+state "ENTIDADES_ABIERTAS\n[ /entidades ]" as ENTIDADES_ABIERTAS
+state "ENTIDAD_ABIERTA\n[ /entidades/:id ]" as ENTIDAD_ABIERTA
+state "DIRECCIONES_ABIERTAS\n(sub-contexto en /entidades/:id)" as DIRECCIONES_ABIERTAS
+state "DIRECCION_DETALLE_ABIERTA\n[ /direcciones/:addr ]\n(extensión de CU-07)" as DIRECCION_DETALLE_ABIERTA
+state "ALERTAS_ABIERTAS\n[ /alertas ]" as ALERTAS_ABIERTAS
+state "ALERTA_ABIERTA\n(modal sobre /alertas)" as ALERTA_ABIERTA
+
+' --- Hub: SISTEMA_DISPONIBLE despacha a las tres áreas funcionales ---
+SISTEMA_DISPONIBLE --> LEADERBOARD_ABIERTO : CU-01 consultarLeaderboard()
+SISTEMA_DISPONIBLE --> ENTIDADES_ABIERTAS  : CU-03 abrirEntidades()
+SISTEMA_DISPONIBLE --> ALERTAS_ABIERTAS    : CU-10 abrirAlertas()
+
+' --- Cabecera global: retorno al hub ---
+LEADERBOARD_ABIERTO --> SISTEMA_DISPONIBLE : volverAlSistema()
+ENTIDADES_ABIERTAS  --> SISTEMA_DISPONIBLE : volverAlSistema()
+ALERTAS_ABIERTAS    --> SISTEMA_DISPONIBLE : volverAlSistema()
+
+' --- Rama 1: Leaderboard ---
+LEADERBOARD_ABIERTO --> LEADERBOARD_ABIERTO : CU-01 reseleccionarTerna()
+
+' --- Rama 2: Entidades → Detalle → Direcciones ---
+ENTIDADES_ABIERTAS --> ENTIDAD_ABIERTA      : CU-02 crearEntidad()
+ENTIDADES_ABIERTAS --> ENTIDAD_ABIERTA      : CU-04 editarEntidad()
+ENTIDADES_ABIERTAS --> ENTIDADES_ABIERTAS   : CU-05 eliminarEntidad()
+
+ENTIDAD_ABIERTA    --> ENTIDADES_ABIERTAS   : volverAEntidades()
+ENTIDAD_ABIERTA    --> ENTIDAD_ABIERTA      : CU-04 editarEntidad()
+ENTIDAD_ABIERTA    --> DIRECCIONES_ABIERTAS : CU-07 abrirDirecciones()
+
+DIRECCIONES_ABIERTAS --> DIRECCIONES_ABIERTAS : CU-06 anadirDireccion()
+DIRECCIONES_ABIERTAS --> DIRECCIONES_ABIERTAS : CU-08 eliminarDireccion()
+
+' --- Extensión CU-07: detalle global de una dirección (transversal) ---
+LEADERBOARD_ABIERTO  --> DIRECCION_DETALLE_ABIERTA : verDetalleDireccion()
+DIRECCIONES_ABIERTAS --> DIRECCION_DETALLE_ABIERTA : verDetalleDireccion()
+DIRECCION_DETALLE_ABIERTA --> LEADERBOARD_ABIERTO  : volverAlLeaderboard()
+DIRECCION_DETALLE_ABIERTA --> ENTIDAD_ABIERTA      : volverAEntidad()
+
+' --- Rama 3: Alertas ---
+ALERTAS_ABIERTAS --> ALERTA_ABIERTA    : CU-09 crearAlerta()
+ALERTAS_ABIERTAS --> ALERTA_ABIERTA    : CU-11 editarAlerta()
+ALERTAS_ABIERTAS --> ALERTAS_ABIERTAS  : CU-12 eliminarAlerta()
+
+ALERTA_ABIERTA   --> ALERTAS_ABIERTAS  : completarFormulario()
+
+' --- Evaluación automática (transiciones internas sobre /alertas) ---
+ALERTAS_ABIERTAS --> ALERTAS_ABIERTAS  : CU-13 evaluarAlertas()
+ALERTAS_ABIERTAS --> ALERTAS_ABIERTAS  : CU-14 enviarNotificacion()
+
+@enduml

@@ -1,0 +1,35 @@
+@startuml
+
+skinparam linetype polyline
+skinparam shadowing false
+skinparam rectangle {
+  BackgroundColor #FAFAFA
+  BorderColor #5A5A5A
+}
+hide stereotype
+
+title Compromisos transversales · dos métricas en tensión por compromiso
+
+rectangle "Latencia\nvs.\nResistencia a huecos" as T1 {
+  rectangle "WebSocket de Hyperliquid\ncomo fuente primaria\n(latencia ≤ 1 s)" as T1a
+  rectangle "Polling REST adaptativo\ncomo red de seguridad\n(no pérdida de eventos)" as T1b
+}
+
+rectangle "Sustituibilidad ahora\nvs.\nFuncionalidad inmediata" as T2 {
+  rectangle "PublicWsAdapter\nfuncional al 100%" as T2a
+  rectangle "NanorethRpcAdapter\nesqueleto que respeta el puerto" as T2b
+}
+
+rectangle "Cifrado en BD\nvs.\nCifrado en aplicación" as T3 {
+  rectangle "pgcrypto (servidor de BD)\nclave: APP_SECRET" as T3a
+  rectangle "Las primitivas viven en BD;\nla clave vive en el proceso del API" as T3b
+}
+
+rectangle "Fuera del MVP\n(omitido y trazado a futuras líneas)" as T4 {
+  rectangle "Autenticación de usuarios" as T4a
+  rectangle "Más tipos de alerta" as T4b
+  rectangle "HyperEVM (lending)" as T4c
+  rectangle "Nodo no validador productivo" as T4d
+}
+
+@enduml

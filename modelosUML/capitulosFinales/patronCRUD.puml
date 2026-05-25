@@ -1,0 +1,43 @@
+@startuml
+
+skinparam linetype polyline
+skinparam shadowing false
+hide footbox
+
+title Patrón CRUD compartido por CU-02..CU-08 y CU-10..CU-12
+
+actor "Usuario" as U
+participant "*Form\n(EntidadForm,\nDireccionForm,\nAlertaForm)" as Form
+participant "*Page\n(EntidadesPage,\nEntidadDetailPage,\nAlertasPage)" as Page
+participant "*.routes.ts\n(Fastify + Zod)" as Route
+participant "*Service\n(CatalogoService,\nAlertasService)" as Svc
+participant "shared/errors.ts\n(filtro global)" as ErrFilter
+database "PostgreSQL\n(entidades,\ndirecciones,\nalertas)" as DB
+participant "React Query\n(sonner toast)" as Cache
+
+U -> Form : rellena / confirma
+Form -> Route : POST/PATCH/DELETE (JSON)
+
+alt Validación falla
+  Route -> Route : Zod 400 Bad Request
+  Route --> Form : { code, issues }
+  Form --> U : toast de error · campos preservados
+else Validación OK
+  Route -> Svc : <verbo>(input)
+  alt Invariante de dominio falla
+    Svc -> ErrFilter : throw EntidadNoEncontrada\n(o similar)
+    ErrFilter --> Route : HTTP 4xx + payload
+    Route --> Form : { code, message }
+    Form --> U : toast explicativo
+  else OK
+    Svc -> DB : INSERT/UPDATE/DELETE
+    DB --> Svc : ok
+    Svc --> Route : entidad resultante
+    Route --> Page : 2xx
+    Page -> Cache : invalidate(GET ...)
+    Cache -> Route : refresca relación
+    Page --> U : toast de éxito + UI refrescada
+  end
+end
+
+@enduml

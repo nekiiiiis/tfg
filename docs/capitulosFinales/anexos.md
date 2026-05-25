@@ -2,7 +2,7 @@
 
 Material de soporte que, por extensión o por falta de contexto en su capítulo natural, se recoge aquí. Los anexos están agrupados por afinidad y referenciados desde los capítulos pertinentes.
 
-> Esta sección **complementa**, no sustituye, los artefactos detallados en los capítulos 2 y 3. Cuando un anexo expone una tabla que ya está en otro capítulo, lo hace para tener todo el material de operación a mano del lector que trabaja con el repositorio.
+> Esta sección **complementa**, no sustituye, los artefactos detallados en los capítulos 2 y 3. Su contenido es deliberadamente tabular: son **catálogos y *checklists* de operación**, no flujos. Donde el material es un flujo o una relación, está en los capítulos correspondientes con su diagrama.
 
 ## A. Resumen del catálogo de casos de uso
 
@@ -183,6 +183,8 @@ Estos pares cubren los activos con mayor volumen sostenido en Hyperliquid (BTC, 
 
 ## G. Material gráfico generado durante el TFG
 
+Resumen por capítulo:
+
 <div align=center>
 
 |Capítulo|Carpeta|Contenido|
@@ -190,11 +192,36 @@ Estos pares cubren los activos con mayor volumen sostenido en Hyperliquid (BTC, 
 |1|[`/imagenes/capitulo1/`](../../imagenes/capitulo1/)|Figura 1 (Fases de RUP) y diagramas auxiliares|
 |2|[`/imagenes/capitulo2/`](../../imagenes/capitulo2/)|Modelo del dominio, diagrama de objetos, diagrama de estados, diagrama de CdU, diagrama de contexto, prototipos P1..P6, secuencias y actividades de CU-01..CU-14|
 |3|[`/imagenes/capitulo3/`](../../imagenes/capitulo3/)|Vista de capas, vista de módulos, bus de eventos, secuencias de diseño (CU-01, CU-09, CU-13, CU-14, CRUD), modelo Entidad-Relación, diagrama de despliegue, paquetes de diseño|
-|Caps. finales|[`/imagenes/capitulosFinales/`](../../imagenes/capitulosFinales/)|Capturas del SPA referenciadas desde [`mapaNavegacion.md`](mapaNavegacion.md) y [`casosDeUsoImplementados.md`](casosDeUsoImplementados.md)|
+|Caps. finales|[`/imagenes/capitulosFinales/`](../../imagenes/capitulosFinales/)|*Ver inventario detallado más abajo*|
 
 </div>
 
-Las fuentes PlantUML de los diagramas viven en [`/modelosUML/`](../../modelosUML/) y se reconstruyen con `plantuml` desde el repositorio.
+Inventario detallado del material gráfico de los capítulos finales:
+
+<div align=center>
+
+|Diagrama / captura|Documento que lo referencia|
+|-|-|
+|`navegacion.svg`|[mapaNavegacion.md](mapaNavegacion.md)|
+|`cascadaCdU.svg`|[casosDeUsoImplementados.md](casosDeUsoImplementados.md)|
+|`cu-01-secuencia.svg`|[CU-01](casosDeUsoImplementados.md#cu-01--consultar-leaderboard)|
+|`cu-09-secuencia.svg`|[CU-09](casosDeUsoImplementados.md#cu-09--crear-alerta-de-precio)|
+|`cu-13-secuencia.svg`|[CU-13](casosDeUsoImplementados.md#cu-13--evaluar-alertas-activas)|
+|`cu-14-secuencia.svg`|[CU-14](casosDeUsoImplementados.md#cu-14--enviar-notificación)|
+|`patronCRUD.svg`|[Patrón CRUD](casosDeUsoImplementados.md#casos-de-uso-crud--cu-02cu-08-y-cu-10cu-12)|
+|`ajustesPila.svg`|[ajustesDePila.md](ajustesDePila.md)|
+|`arbolObjetivos.svg`|[conclusiones.md](conclusiones.md)|
+|`coberturaRS.svg`|[Cobertura RS](conclusiones.md#cobertura-de-los-requisitos-suplementarios)|
+|`decisionesTecnicas.svg`|[Decisiones técnicas](discusion.md#decisiones-técnicas-de-mayor-calado)|
+|`compromisosTransversales.svg`|[Compromisos transversales](discusion.md#compromisos-transversales)|
+|`futurasLineas.svg`|[Mapa de continuaciones](futuras.md#mapa-de-continuaciones)|
+|`plazosFuturas.svg`|[Plazos y dependencias](futuras.md#plazos-y-dependencias)|
+|`leaderboard.png` · `entidades.png` · `direccion.png` · `alertas.png`|[mapaNavegacion.md](mapaNavegacion.md)|
+|`cu-01-leaderboard.png` · `cu-09-alerta-form.png` · `cu-13-estado-alerta.png` · `cu-14-rearme.png`|[casosDeUsoImplementados.md](casosDeUsoImplementados.md)|
+
+</div>
+
+Las fuentes PlantUML viven en [`/modelosUML/capitulosFinales/`](../../modelosUML/capitulosFinales/) y los SVG se regeneran con `plantuml -tsvg modelosUML/capitulosFinales/*.puml -o imagenes/capitulosFinales/` desde la raíz del repositorio.
 
 ## H. Referencias cruzadas del repositorio
 

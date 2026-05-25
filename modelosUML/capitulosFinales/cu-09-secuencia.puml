@@ -1,0 +1,38 @@
+@startuml
+
+skinparam linetype polyline
+skinparam shadowing false
+hide footbox
+
+title CU-09 — Crear alerta de precio · realización en el código
+
+actor "Usuario" as U
+participant "AlertasPage\n+ AlertaForm (modal)" as UI
+participant "alertas.routes.ts\n(Fastify + Zod)" as Route
+participant "AlertasService" as Svc
+participant "WebhookConnector" as WC
+participant "pgcrypto\n(pgp_sym_encrypt)" as Crypto
+database    "alertas\n(PostgreSQL)" as DB
+participant "Webhook receptor" as Hook
+
+U  -> UI : pulsa *Nueva alerta* y rellena formulario
+UI -> Route : POST /api/alertas {mercado, token, umbral, webhookUrl}
+
+Route -> Route : validar con Zod\n(400 si falla)
+Route -> Svc  : crear(input)
+Svc   -> WC   : checkReachability(url)
+WC    -> Hook : HEAD/GET (timeout corto)
+Hook  --> WC  : 2xx | timeout | error
+WC    --> Svc : alcanzable: boolean
+
+Svc -> Crypto : encrypt(url, APP_SECRET)
+Crypto --> Svc : webhook_url_enc (bytea)
+Svc -> DB     : INSERT INTO alertas (...estado='OPERATIVA')
+DB  --> Svc   : id, ts
+
+Svc  --> Route : { id, webhookAlcanzable }
+Route --> UI   : 201 Created
+UI   -> U     : toast (éxito o aviso "webhook no alcanzable")
+UI   -> UI    : invalidate(GET /api/alertas) → refresca relación
+
+@enduml

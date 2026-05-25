@@ -1,0 +1,26 @@
+@startuml
+
+skinparam linetype polyline
+skinparam shadowing false
+skinparam ArrowColor #555555
+skinparam rectangle {
+  BackgroundColor #FAFAFA
+  BorderColor #5A5A5A
+  FontColor #1F1F1F
+}
+hide empty description
+
+title Cascada de capas de un caso de uso\nDetalle → Prototipo → Análisis → Diseño → Implementación
+
+rectangle "Detalle del CdU\n(cap. 2)" as Detalle
+rectangle "Prototipo de interfaz\n(cap. 2)" as Prototipo
+rectangle "Realización de análisis\nR(CU-XX) — cap. 3" as Analisis
+rectangle "Realización de diseño\nR(CU-XX) — cap. 3" as Diseno
+rectangle "Implementación\n(cap. 4 — interfaz real)" as Implementacion
+
+Detalle  --> Prototipo : refina
+Prototipo --> Analisis : guía
+Analisis --> Diseno    : concreta
+Diseno   --> Implementacion : materializa
+
+@enduml

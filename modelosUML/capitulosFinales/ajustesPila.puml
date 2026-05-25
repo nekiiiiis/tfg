@@ -1,0 +1,49 @@
+@startuml
+
+skinparam linetype ortho
+skinparam shadowing false
+skinparam rectangle {
+  BackgroundColor #FAFAFA
+  BorderColor #5A5A5A
+  FontColor #1F1F1F
+}
+skinparam package {
+  BackgroundColor #FAFAFA
+  BorderColor #5A5A5A
+}
+hide stereotype
+
+title Ajustes de pila · diseño exploratorio inicial → implementación final
+
+package "Diseño exploratorio inicial (cap. 3)" as Antes {
+  rectangle "NestJS 10\n(HTTP + WS)"     as N_Nest
+  rectangle "TypeORM"                    as N_ORM
+  rectangle "Redis sorted sets\n(estado caliente)" as N_Redis1
+  rectangle "Redis Lists + worker\n(cola de reintentos)" as N_Redis2
+  rectangle "@nestjs/event-emitter"      as N_Bus
+  rectangle "React + CRA / Next.js"      as N_Front
+  rectangle "Cifrado aplicativo\n(AES en proceso)" as N_Crypto
+  rectangle "Kubernetes\n(Helm chart)"   as N_K8s
+}
+
+package "Implementación final (cap. 4)" as Despues {
+  rectangle "Fastify 5\n+ Zod"                       as I_Fastify
+  rectangle "Drizzle ORM + Kit\n(SQL-first)"         as I_Drizzle
+  rectangle "LeaderboardState\n(in-memory · Map+FIFO)" as I_State
+  rectangle "Tabla notificaciones\n+ RetryWorker"    as I_Retry
+  rectangle "TypedBus<DomainEventMap>\n(EventEmitter de Node)" as I_Bus
+  rectangle "Vite 8 + React 19\n+ Tailwind 4 + shadcn/ui" as I_Front
+  rectangle "pgcrypto\n(pgp_sym_encrypt)"            as I_Crypto
+  rectangle "Docker Compose\n(app + postgres)"       as I_Compose
+}
+
+N_Nest    -[#1565C0]-> I_Fastify : sustituye\n(RS-01, RS-02)
+N_ORM     -[#1565C0]-> I_Drizzle : sustituye
+N_Redis1  -[#1565C0]-> I_State   : sustituye\n(RS-01, RS-03)
+N_Redis2  -[#1565C0]-> I_Retry   : sustituye\n(RS-03, RS-07)
+N_Bus     -[#1565C0]-> I_Bus     : sustituye\n(RS-04)
+N_Front   -[#1565C0]-> I_Front   : sustituye\n(RS-05)
+N_Crypto  -[#1565C0]-> I_Crypto  : sustituye\n(RS-10)
+N_K8s     -[#1565C0]-> I_Compose : sustituye\n(RS-03)
+
+@enduml

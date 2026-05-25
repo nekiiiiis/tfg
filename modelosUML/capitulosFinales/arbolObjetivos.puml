@@ -1,0 +1,35 @@
+@startuml
+
+skinparam linetype ortho
+skinparam shadowing false
+skinparam rectangle {
+  BackgroundColor #FAFAFA
+  BorderColor #5A5A5A
+  FontColor #1F1F1F
+}
+hide stereotype
+
+title Cierre del ciclo de objetivos del capítulo 1
+
+rectangle "Hipótesis (cap. 1)\nUna solución a medida sobre la L1 de Hyperliquid\ncubre un vacío que ninguna herramienta del estado del arte cubre" as H
+
+rectangle "Objetivo general\nProporcionar a Infinite Fieldx un conjunto\nde herramientas en tiempo real sobre la L1" as OG
+
+rectangle "OE1\nDisciplina de Requisitos" as OE1
+rectangle "OE2\nDisciplina de Análisis y Diseño" as OE2
+rectangle "OE3\nProducto Mínimo Viable" as OE3
+
+rectangle "Capítulo 2\nDdR cerrada\n· Modelo del dominio\n· 14 CdU + RS-01..RS-10\n· Diagrama de contexto" as C2
+rectangle "Capítulo 3\nDdA + DdD cerradas\n· Arquitectura en capas\n· Puerto hexagonal\n· Modelo de datos\n· Despliegue" as C3
+rectangle "Caps. finales\nConstrucción cerrada\n· MVP ejecutable en src/\n· 14/14 CdU implementados\n· 10/10 RS cubiertos" as C4
+
+H  --> OG  : se contrasta con
+OG --> OE1
+OG --> OE2
+OG --> OE3
+
+OE1 --> C2 : cerrada por
+OE2 --> C3 : cerrada por
+OE3 --> C4 : cerrada por
+
+@enduml

@@ -1,0 +1,39 @@
+@startmindmap
+
+skinparam shadowing false
+<style>
+mindmapDiagram {
+  node {
+    BackgroundColor #FAFAFA
+    LineColor #5A5A5A
+    FontColor #1F1F1F
+  }
+  :depth(0) {
+    BackgroundColor #FEFFE6
+  }
+}
+</style>
+
+* Futuras líneas\n(continuaciones del MVP)
+** Infraestructura
+*** Del WS público al **nodo no validador**\n//(IHyperliquidSource)//
+*** Crecer de un **proceso a un cluster**\n//(bus + estado + retry)//
+*** **Observabilidad operativa**\n//(Prometheus + OTel + Grafana)//
+*** Migración a **Kubernetes**\n//(opcional)//
+** Funcional
+*** **Nuevos tipos de alerta**\n//(actividad, OI, funding, liq.)//
+*** Integración con **HyperEVM**\n//(lending, health rates)//
+*** **Clustering automático** de direcciones\n//(heurísticas)//
+*** **Histórico y replay** del leaderboard
+*** Refinamientos visuales\n//(sparklines, export, prefs)//
+** Calidad y seguridad
+*** **Endurecimiento de seguridad**\n//(AuthN/Z, rate-limit, auditoría)//
+*** **Pruebas automatizadas**\n//(unit, integración, e2e)//
+*** **Internacionalización**\n//(i18n)//
+** Validación y adopción
+*** **Sesión de presentación** al cliente
+*** **Periodo de uso piloto**
+*** **Retroalimentación** estructurada
+*** **Documentación operativa**\n//(despliegue, operación, runbook)//
+
+@endmindmap

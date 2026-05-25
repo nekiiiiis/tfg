@@ -9,7 +9,7 @@ title CU-13 — Evaluar alertas activas · realización en el código\n(actor: H
 participant "Hyperliquid L1" as L1
 participant "PublicWsAdapter" as Adapter
 participant "server.ts\n(composition root)" as Boot
-participant "TypedBus<DomainEventMap>" as Bus
+participant "TypedBus" as Bus
 participant "evaluacion.subscriber.ts\n(wireEvaluacion)" as Sub
 participant "evaluator.ts\nevaluarAlertasContraPrecio" as Eval
 database    "alertas\n(PostgreSQL)" as DB

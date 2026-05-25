@@ -41,6 +41,8 @@ Esta carpeta agrupa el material gráfico referenciado desde los capítulos final
 |`cu-09-alerta-form.png`|CU-09 — Formulario de alerta|[`casosDeUsoImplementados.md`](../../docs/capitulosFinales/casosDeUsoImplementados.md)|
 |`cu-13-estado-alerta.png`|CU-13 — Transición de estado tras disparo|[`casosDeUsoImplementados.md`](../../docs/capitulosFinales/casosDeUsoImplementados.md)|
 |`cu-14-rearme.png`|CU-14 — Rearme tras entrega exitosa|[`casosDeUsoImplementados.md`](../../docs/capitulosFinales/casosDeUsoImplementados.md)|
+|`mensaje-sube.png`|CU-14 — Mensaje entregado al receptor del webhook (cruce al alza)|[`casosDeUsoImplementados.md`](../../docs/capitulosFinales/casosDeUsoImplementados.md#mensaje-tal-como-llega-al-receptor)|
+|`mensaje-baja.png`|CU-14 — Mensaje entregado al receptor del webhook (cruce a la baja)|[`casosDeUsoImplementados.md`](../../docs/capitulosFinales/casosDeUsoImplementados.md#mensaje-tal-como-llega-al-receptor)|
 
 </div>
 

@@ -225,7 +225,19 @@ En `AlertasPage`, la columna *Estado* pasa de `DISPARADA` a `OPERATIVA` al rearm
 }
 ```
 
-### Captura
+### Mensaje tal como llega al receptor
+
+El destinatario del webhook —en el escenario de uso del cliente, un canal de Discord— recibe el cuerpo JSON anterior y lo renderiza con su formato propio. Las dos capturas siguientes muestran el mensaje real para los dos cruces que materializa el dominio: `SUBE` (el precio atraviesa el umbral al alza) y `BAJA` (lo atraviesa a la baja). El mismo `WebhookConnector` sirve a ambos casos: la diferencia es de **dato** (`umbral.cruce` en el payload), no de flujo.
+
+<div align=center>
+
+|Cruce al alza (`SUBE`)|Cruce a la baja (`BAJA`)|
+|-|-|
+|![Mensaje recibido — alerta al alza](../../imagenes/capitulosFinales/mensaje-sube.png)|![Mensaje recibido — alerta a la baja](../../imagenes/capitulosFinales/mensaje-baja.png)|
+
+</div>
+
+### Captura del rearme en la SPA
 
 <div align=center>
 

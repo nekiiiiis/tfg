@@ -1,7 +1,7 @@
 @startuml
 
 skinparam shadowing false
-skinparam rectangle {
+skinparam card {
   BackgroundColor #FAFAFA
   BorderColor #5A5A5A
   FontColor #1F1F1F
@@ -10,21 +10,44 @@ hide stereotype
 
 title Plazos orientativos de las cuatro líneas de continuación
 
-rectangle "Corto plazo\n(semanas)" as P1 {
-  rectangle "Validación y adopción\n• Presentación al cliente\n• Uso piloto + retroalimentación\n• Doc. operativa" as L1
-}
+card P1 [
+**Corto plazo** (semanas)
+====
+Validación y adopción
+• Presentación al cliente
+• Uso piloto + retroalimentación
+• Documentación operativa
+]
 
-rectangle "Corto-medio plazo\n(1–4 meses)" as P2 {
-  rectangle "Calidad y seguridad\n• AuthN / Z\n• Rate limiting\n• Suite de pruebas\n• i18n" as L2
-}
+card P2 [
+**Corto-medio plazo** (1–4 meses)
+====
+Calidad y seguridad
+• AuthN / AuthZ
+• Rate limiting
+• Suite de pruebas
+• Internacionalización (i18n)
+]
 
-rectangle "Medio plazo\n(3–6 meses)" as P3 {
-  rectangle "Infraestructura\n• Nodo no validador\n• Cluster\n• Observabilidad\n• Kubernetes" as L3
-}
+card P3 [
+**Medio plazo** (3–6 meses)
+====
+Infraestructura
+• Nodo no validador
+• Cluster (bus + estado + retry)
+• Observabilidad operativa
+• Kubernetes (opcional)
+]
 
-rectangle "Medio-largo plazo\n(6–12 meses)" as P4 {
-  rectangle "Funcional\n• Nuevos tipos de alerta\n• HyperEVM\n• Clustering automático\n• Histórico" as L4
-}
+card P4 [
+**Medio-largo plazo** (6–12 meses)
+====
+Funcional
+• Nuevos tipos de alerta
+• HyperEVM (lending)
+• Clustering automático
+• Histórico y replay
+]
 
 P1 -[#1565C0]-> P2 : precondición operativa
 P2 -[#1565C0]-> P3 : precondición de calidad

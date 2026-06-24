@@ -1,0 +1,411 @@
+{
+  "id": "f7b38237-76be-414f-af3b-aa8ee274c0d5",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.entidades": {
+      "name": "entidades",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "nombre": {
+          "name": "nombre",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "creada_en": {
+          "name": "creada_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "actualizada": {
+          "name": "actualizada",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "entidades_nombre_unico": {
+          "name": "entidades_nombre_unico",
+          "nullsNotDistinct": false,
+          "columns": [
+            "nombre"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "entidades_nombre_no_vacio": {
+          "name": "entidades_nombre_no_vacio",
+          "value": "length(trim(\"entidades\".\"nombre\")) > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.direcciones": {
+      "name": "direcciones",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "valor": {
+          "name": "valor",
+          "type": "char(42)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entidad_id": {
+          "name": "entidad_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "aniadida_en": {
+          "name": "aniadida_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "direcciones_entidad": {
+          "name": "direcciones_entidad",
+          "columns": [
+            {
+              "expression": "entidad_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "direcciones_entidad_id_entidades_id_fk": {
+          "name": "direcciones_entidad_id_entidades_id_fk",
+          "tableFrom": "direcciones",
+          "tableTo": "entidades",
+          "columnsFrom": [
+            "entidad_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "direcciones_valor_unico": {
+          "name": "direcciones_valor_unico",
+          "nullsNotDistinct": false,
+          "columns": [
+            "valor"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "direcciones_formato": {
+          "name": "direcciones_formato",
+          "value": "\"direcciones\".\"valor\" ~ '^0x[a-f0-9]{40}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.alertas": {
+      "name": "alertas",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "token_simbolo": {
+          "name": "token_simbolo",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mercado": {
+          "name": "mercado",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "umbral_valor": {
+          "name": "umbral_valor",
+          "type": "numeric(28, 8)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "umbral_cruce": {
+          "name": "umbral_cruce",
+          "type": "cruce",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "webhook_url_enc": {
+          "name": "webhook_url_enc",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "estado": {
+          "name": "estado",
+          "type": "estado_alerta",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'OPERATIVA'"
+        },
+        "creada_en": {
+          "name": "creada_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "ultimo_disparo": {
+          "name": "ultimo_disparo",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ultimo_intento": {
+          "name": "ultimo_intento",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "alertas_token_estado": {
+          "name": "alertas_token_estado",
+          "columns": [
+            {
+              "expression": "token_simbolo",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "estado",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.notificaciones": {
+      "name": "notificaciones",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "alerta_id": {
+          "name": "alerta_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "precio_disparador": {
+          "name": "precio_disparador",
+          "type": "numeric(28, 8)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "instante_emision": {
+          "name": "instante_emision",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "estado": {
+          "name": "estado",
+          "type": "estado_entrega",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'PENDIENTE'"
+        },
+        "intento": {
+          "name": "intento",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "proximo_intento": {
+          "name": "proximo_intento",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "ultimo_error": {
+          "name": "ultimo_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "entregada_en": {
+          "name": "entregada_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "notif_alerta": {
+          "name": "notif_alerta",
+          "columns": [
+            {
+              "expression": "alerta_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "instante_emision",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "notif_pendientes_proximas": {
+          "name": "notif_pendientes_proximas",
+          "columns": [
+            {
+              "expression": "estado",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "proximo_intento",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "notificaciones_alerta_id_alertas_id_fk": {
+          "name": "notificaciones_alerta_id_alertas_id_fk",
+          "tableFrom": "notificaciones",
+          "tableTo": "alertas",
+          "columnsFrom": [
+            "alerta_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.cruce": {
+      "name": "cruce",
+      "schema": "public",
+      "values": [
+        "SUBE",
+        "BAJA"
+      ]
+    },
+    "public.estado_alerta": {
+      "name": "estado_alerta",
+      "schema": "public",
+      "values": [
+        "OPERATIVA",
+        "DISPARADA",
+        "NOTIFICACION_FALLIDA"
+      ]
+    },
+    "public.estado_entrega": {
+      "name": "estado_entrega",
+      "schema": "public",
+      "values": [
+        "PENDIENTE",
+        "ENTREGADA",
+        "FALLIDA"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

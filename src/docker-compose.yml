@@ -1,0 +1,62 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fieldx-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-infinite_fieldx}
+      POSTGRES_USER: ${POSTGRES_USER:-fieldx}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fieldx_dev_password_change_me}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - fieldx-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fieldx} -d ${POSTGRES_DB:-infinite_fieldx}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - fieldx-internal
+
+  app:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    container_name: fieldx-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3001
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATABASE_URL: postgres://${POSTGRES_USER:-fieldx}:${POSTGRES_PASSWORD:-fieldx_dev_password_change_me}@postgres:5432/${POSTGRES_DB:-infinite_fieldx}
+      APP_SECRET: ${APP_SECRET}
+      HYPERLIQUID_SOURCE: ${HYPERLIQUID_SOURCE:-public-ws}
+      HYPERLIQUID_WS_URL: ${HYPERLIQUID_WS_URL:-wss://api.hyperliquid.xyz/ws}
+      HYPERLIQUID_INFO_URL: ${HYPERLIQUID_INFO_URL:-https://api.hyperliquid.xyz/info}
+      NANORETH_RPC_URL: ${NANORETH_RPC_URL:-http://localhost:8545}
+    ports:
+      - "3001:3001"
+    networks:
+      - fieldx-internal
+      - fieldx-edge
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+networks:
+  fieldx-internal:
+    driver: bridge
+    internal: false
+  fieldx-edge:
+    driver: bridge
+
+volumes:
+  fieldx-postgres-data:

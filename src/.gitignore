@@ -1,0 +1,20 @@
+# Dependencias y artefactos de build
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+.cache/
+
+# Secretos y configuración local (nunca commitear)
+.env
+.env.*
+!.env.example
+
+# Logs y cobertura
+*.log
+coverage/
+
+# IDE y SO
+.DS_Store
+.idea/
+.vscode/

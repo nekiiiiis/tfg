@@ -20,6 +20,7 @@ Siguiendo la división recomendada por la metodología: un capítulo de **presen
 
 ### Capítulo 4 — Descripción de la solución
 
+
 <div align=center>
 
 ||||
@@ -31,6 +32,8 @@ Siguiendo la división recomendada por la metodología: un capítulo de **presen
 </div>
 
 > Código fuente de la solución: [`src/`](../../src/) · Capturas e imágenes del SPA: [`imagenes/capitulosFinales/`](../../imagenes/capitulosFinales/)
+
+Vídeo de la aplicación funcionando en tiempo real: https://drive.google.com/file/d/1Qw6Y5TqlXRRtUZhNU0LeAOMgCTOHOKYE/view?usp=sharing
 
 ### Capítulo 5 — Conclusiones, discusión y futuras líneas
 
